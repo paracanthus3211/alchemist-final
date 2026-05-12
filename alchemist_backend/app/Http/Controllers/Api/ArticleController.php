@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Article;
 use App\Models\ArticleContent;
 use App\Models\Bookmark;
+use App\Traits\UpdatesDailyTasks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ArticleController extends Controller
 {
+    use UpdatesDailyTasks;
+
     public function index(Request $request)
     {
         $query = Article::query();
@@ -29,7 +32,7 @@ class ArticleController extends Controller
         }
 
         $user = $request->user('sanctum');
-        $articles = $query->latest()->get();
+        $articles = $query->with('contents')->latest()->get();
 
         $articles = $articles->map(function($article) use ($user) {
             $article->is_bookmarked = $user ? $user->bookmarks()->where('article_id', $article->id)->exists() : false;
@@ -43,15 +46,69 @@ class ArticleController extends Controller
     {
         $article = Article::with('contents')->findOrFail($id);
         $user = $request->user('sanctum');
-        $article->is_bookmarked = $user ? $user->bookmarks()->where('article_id', $article->id)->exists() : false;
+        
+        if ($user) {
+            $article->is_bookmarked = $user->bookmarks()->where('article_id', $article->id)->exists();
+            
+            // Track in history (upsert)
+            DB::table('user_article_history')->updateOrInsert(
+                ['user_id' => $user->id, 'article_id' => $article->id],
+                ['completed_at' => null, 'updated_at' => now()]
+            );
+        } else {
+            $article->is_bookmarked = false;
+        }
         
         return response()->json(['data' => $article]);
+    }
+
+    public function finish($id, Request $request)
+    {
+        $user = $request->user();
+        DB::table('user_article_history')->updateOrInsert(
+            ['user_id' => $user->id, 'article_id' => $id],
+            ['completed_at' => now(), 'updated_at' => now()]
+        );
+
+        // Update Daily Task
+        $this->_incrementDailyTaskProgress($user, 'READ_ARTICLE', 1, $id);
+
+        $authController = new AuthController();
+        $progress = $authController->getQuizProgressData($user);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Article finished',
+            'user' => [
+                'xp' => $user->xp,
+                'quiz_level' => $progress['level'],
+                'current_level_name' => $progress['level_name'],
+                'current_chapter_title' => $progress['chapter_title'],
+                'current_level_progress' => $progress['level_progress'],
+            ]
+        ]);
+    }
+
+    public function history(Request $request)
+    {
+        $user = $request->user();
+        $history = DB::table('user_article_history')
+            ->where('user_id', $user->id)
+            ->whereNull('completed_at') // Hanya tampilkan yang belum selesai
+            ->join('articles', 'user_article_history.article_id', '=', 'articles.id')
+            ->select('articles.*', 'user_article_history.completed_at', 'user_article_history.updated_at as last_read_at')
+            ->orderBy('user_article_history.updated_at', 'desc')
+            ->limit(10)
+            ->get();
+            
+        return response()->json(['data' => $history]);
     }
 
     public function store(Request $request)
     {
         $request->validate([
             'title' => 'required|string',
+            'description' => 'nullable|string',
             'category' => 'nullable|string',
             'difficulty_level' => 'nullable|string',
             'thumbnail_url' => 'nullable|string',
@@ -59,7 +116,7 @@ class ArticleController extends Controller
         ]);
 
         return DB::transaction(function() use ($request) {
-            $article = Article::create($request->only(['title', 'category', 'difficulty_level', 'thumbnail_url']));
+            $article = Article::create($request->only(['title', 'description', 'category', 'difficulty_level', 'thumbnail_url']));
 
             foreach ($request->contents as $index => $content) {
                 $article->contents()->create([
@@ -79,6 +136,7 @@ class ArticleController extends Controller
 
         $request->validate([
             'title' => 'required|string',
+            'description' => 'nullable|string',
             'category' => 'nullable|string',
             'difficulty_level' => 'nullable|string',
             'thumbnail_url' => 'nullable|string',
@@ -86,7 +144,7 @@ class ArticleController extends Controller
         ]);
 
         return DB::transaction(function() use ($request, $article) {
-            $article->update($request->only(['title', 'category', 'difficulty_level', 'thumbnail_url']));
+            $article->update($request->only(['title', 'description', 'category', 'difficulty_level', 'thumbnail_url']));
 
             if ($request->has('contents')) {
                 $article->contents()->delete();

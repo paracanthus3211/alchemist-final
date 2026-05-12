@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'widgets/background_wrapper.dart';
 import 'services/api_service.dart';
@@ -77,11 +78,6 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
   String _currentReactionDesc = "Campurkan dua bahan kimia untuk melihat reaksinya";
   String _currentReactionType = "🧪 22 Bahan Siap Bereaksi";
 
-  // Calculator state
-  final TextEditingController _formulaController = TextEditingController(text: "H2O");
-  double _molarMassResult = 18.015;
-  String _molarMassDetail = "H₂O = (2 × 1.008) + 16.00 = 18.016 g/mol";
-  bool _showCalculator = true;
 
   late Map<String, Chemical> _chemicals;
 
@@ -89,7 +85,6 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
   void initState() {
     super.initState();
     _initChemicals();
-    _calculateMolarMass();
   }
 
   void _initChemicals() {
@@ -134,81 +129,6 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
     "nh3+hcl": ReactionResult(eq: "NH₃ + HCl → NH₄Cl", desc: "Amonia bereaksi dengan asam membentuk asap putih!", type: "✨ Gas Reaction", product: "NH4Cl", productFormula: "NH4Cl", color: const Color(0xFFF8F9FA), gradient: [const Color(0xFFF8F9FA), const Color(0xFFDEE2E6)]),
   };
 
-  final Map<String, double> _atomicMasses = {
-    'H': 1.008, 'He': 4.0026, 'Li': 6.94, 'Be': 9.012, 'B': 10.81, 'C': 12.011,
-    'N': 14.007, 'O': 16.00, 'F': 18.998, 'Ne': 20.180, 'Na': 22.990, 'Mg': 24.305,
-    'Al': 26.982, 'Si': 28.086, 'P': 30.974, 'S': 32.06, 'Cl': 35.45, 'K': 39.098,
-    'Ca': 40.078, 'Fe': 55.845, 'Cu': 63.546, 'Zn': 65.38, 'Ag': 107.87, 'I': 126.90,
-    'Ba': 137.33, 'Au': 196.97, 'Hg': 200.59, 'Pb': 207.2, 'Br': 79.904, 'Cr': 52.00,
-    'Mn': 54.94, 'Co': 58.93, 'Ni': 58.69, 'Sn': 118.71, 'Sr': 87.62, 'Ti': 47.87, 'V': 50.94
-  };
-
-  void _calculateMolarMass() {
-    String formula = _formulaController.text.trim();
-    if (formula.isEmpty) return;
-
-    try {
-      // Normalize subscripts
-      formula = formula.replaceAll('₂', '2').replaceAll('₃', '3').replaceAll('₄', '4');
-      
-      int i = 0;
-      double parseGroup() {
-        double mass = 0;
-        while (i < formula.length) {
-          String char = formula[i];
-          if (char == '(') {
-            i++;
-            double subMass = parseGroup();
-            if (i < formula.length && formula[i] == ')') i++; // skip ')'
-            int multiplier = 1;
-            String numStr = "";
-            while (i < formula.length && RegExp(r'[0-9]').hasMatch(formula[i])) {
-              numStr += formula[i];
-              i++;
-            }
-            if (numStr.isNotEmpty) multiplier = int.parse(numStr);
-            mass += subMass * multiplier;
-          } else if (char == ')') {
-            break;
-          } else if (RegExp(r'[A-Z]').hasMatch(char)) {
-            String element = char;
-            if (i + 1 < formula.length && RegExp(r'[a-z]').hasMatch(formula[i + 1])) {
-              element += formula[i + 1];
-              i++;
-            }
-            i++;
-            int count = 1;
-            String numStr = "";
-            while (i < formula.length && RegExp(r'[0-9]').hasMatch(formula[i])) {
-              numStr += formula[i];
-              i++;
-            }
-            if (numStr.isNotEmpty) count = int.parse(numStr);
-            if (_atomicMasses.containsKey(element)) {
-              mass += _atomicMasses[element]! * count;
-            } else {
-              throw Exception("Element $element not found");
-            }
-          } else {
-            i++;
-          }
-        }
-        return mass;
-      }
-
-      double totalMass = parseGroup();
-      setState(() {
-        _molarMassResult = totalMass;
-        _molarMassDetail = "$formula = ${totalMass.toStringAsFixed(3)} g/mol";
-      });
-    } catch (e) {
-      setState(() {
-        _molarMassResult = 0;
-        _molarMassDetail = "Invalid Formula";
-      });
-    }
-  }
-
   void _selectBeaker(String id) {
     setState(() {
       _selectedBeaker = id;
@@ -229,7 +149,7 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF0B1214),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: const BorderSide(color: Colors.white10)),
-        title: Text("Beaker $id Content", style: const TextStyle(color: Color(0xFFCCFF00), fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text("Beaker $id Content", style: GoogleFonts.spaceGrotesk(color: const Color(0xFFCCFF00), fontSize: 18, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -240,14 +160,14 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
               child: Center(child: Text(chem?.emoji ?? "🧪", style: const TextStyle(fontSize: 40))),
             ),
             const SizedBox(height: 16),
-            Text(chem?.fullName ?? "Unknown Substance", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            Text(beaker['formula'] ?? "", style: const TextStyle(color: Color(0xFF00FBFF), fontSize: 14, fontFamily: 'monospace')),
+            Text(chem?.fullName ?? "Unknown Substance", style: GoogleFonts.spaceGrotesk(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text(beaker['formula'] ?? "", style: GoogleFonts.spaceGrotesk(color: const Color(0xFF00FBFF), fontSize: 14)),
             const SizedBox(height: 8),
-            Text("Volume: ${beaker['amount']} ml", style: const TextStyle(color: Colors.white70)),
+            Text("Volume: ${beaker['amount']} ml", style: GoogleFonts.spaceGrotesk(color: Colors.white70)),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CLOSE", style: TextStyle(color: Colors.white38))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text("CLOSE", style: GoogleFonts.spaceGrotesk(color: Colors.white38))),
         ],
       ),
     );
@@ -426,7 +346,6 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
   @override
   void dispose() {
     _heatingTimer?.cancel();
-    _formulaController.dispose();
     super.dispose();
   }
 
@@ -462,10 +381,7 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
                       _buildInventory(),
                       const SizedBox(height: 12),
                       
-                      // Calculator
-                      _buildCalculator(),
-                      const SizedBox(height: 12),
-                      
+
                       // Reaction Info
                       _buildReactionInfo(),
                       const SizedBox(height: 100),
@@ -497,8 +413,8 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text("⚗️ ALCHEMIST LAB PRO", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
-              Text("22 Chemicals | Mix, Heat & Calculate", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+              Text("⚗️ ALCHEMIST LAB PRO", style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
+              Text("22 Chemicals | Mix, Heat & Calculate", style: GoogleFonts.spaceGrotesk(color: Colors.white.withOpacity(0.5), fontSize: 10)),
             ],
           ),
           Container(
@@ -508,7 +424,7 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
               children: [
                 const Icon(Icons.star, color: Color(0xFFFFD700), size: 16),
                 const SizedBox(width: 4),
-                Text("$_displayXp XP", style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14)),
+                Text("$_displayXp XP", style: GoogleFonts.spaceGrotesk(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14)),
               ],
             ),
           ),
@@ -733,8 +649,6 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
                 return GestureDetector(
                   onTap: () {
                     setState(() => _selectedChemicalId = chem.id);
-                    _formulaController.text = chem.formula;
-                    _calculateMolarMass();
                     _showToast("✅ Selected: ${chem.fullName} (${chem.formula})");
                   },
                   child: Container(
@@ -766,97 +680,6 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
               },
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalculator() {
-    final keys = ['H', 'O', 'C', 'N', 'Na', 'Cl', 'Ca', 'Mg', 'S', 'K', 'Fe', 'Cu', 'Zn', 'Ag', 'Pb', 'Ba', '(', ')', '₂', '₃', '₄', 'Clear', 'Hitung'];
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(24)),
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: () => setState(() => _showCalculator = !_showCalculator),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.calculate, color: Colors.white, size: 16),
-                    SizedBox(width: 8),
-                    Text("📐 Kalkulator Massa Molar", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                Icon(_showCalculator ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: const Color(0xFFFFD700)),
-              ],
-            ),
-          ),
-          if (_showCalculator) ...[
-            const SizedBox(height: 10),
-            TextField(
-              controller: _formulaController,
-              onChanged: (_) => _calculateMolarMass(),
-              style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 14),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.1),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFFD700))),
-                hintText: "Contoh: H2O, Ca(OH)2",
-                hintStyle: const TextStyle(color: Colors.white24),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6, runSpacing: 6,
-              children: keys.map((key) {
-                final isAction = key == 'Clear' || key == 'Hitung';
-                return GestureDetector(
-                  onTap: () {
-                    if (key == 'Clear') {
-                      _formulaController.clear();
-                    } else if (key == 'Hitung') {
-                      _calculateMolarMass();
-                    } else {
-                      _formulaController.text += key;
-                    }
-                    _calculateMolarMass();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: key == 'Hitung' ? const Color(0xFFFFD700) : Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(key, style: TextStyle(color: key == 'Hitung' ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(16)),
-              child: Column(
-                children: [
-                  RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(text: _molarMassResult.toStringAsFixed(3), style: const TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-                        const TextSpan(text: " g/mol", style: TextStyle(color: Colors.white54, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(_molarMassDetail, style: const TextStyle(color: Colors.white38, fontSize: 10)),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );

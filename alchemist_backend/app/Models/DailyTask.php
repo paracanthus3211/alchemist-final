@@ -13,12 +13,14 @@ class DailyTask extends Model
         'target_value',
         'xp_reward',
         'is_active',
+        'stages',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'target_value' => 'integer',
         'xp_reward' => 'integer',
+        'stages' => 'array',
     ];
 
     public function userProgress()

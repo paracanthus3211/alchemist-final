@@ -34,6 +34,7 @@ class DatabaseSeeder extends Seeder
         // 3. Call Curriculum Seeder
         $this->call([
             CurriculumSeeder::class,
+            UserSeeder::class,
         ]);
     }
 }

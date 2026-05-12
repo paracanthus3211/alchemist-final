@@ -30,6 +30,36 @@ class _ArticleViewScreenState extends State<ArticleViewScreen> {
     });
   }
 
+  bool _isFinishing = false;
+
+  Future<void> _handleFinish() async {
+    if (_isFinishing) return;
+    setState(() => _isFinishing = true);
+
+    try {
+      final success = await _apiService.finishArticle(widget.articleId);
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Article finished! Reward added to history.'),
+              backgroundColor: const Color(0xFF00FBFF),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 1),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+        // Selalu keluar setelah mencoba simpan
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isFinishing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const primaryCyan = Color(0xFF00FBFF);
@@ -56,6 +86,25 @@ class _ArticleViewScreenState extends State<ArticleViewScreen> {
                               _buildHeroSection(),
                               const SizedBox(height: 32),
                               ...(_article!['contents'] as List).map((block) => _buildBlock(block, primaryCyan)).toList(),
+                              const SizedBox(height: 40),
+                              Center(
+                                child: ElevatedButton(
+                                  onPressed: _handleFinish,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryCyan,
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                                  ),
+                                  child: _isFinishing
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                                        )
+                                      : const Text('FINISH READING', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                                ),
+                              ),
                               const SizedBox(height: 60),
                             ],
                           ),
@@ -132,11 +181,33 @@ class _ArticleViewScreenState extends State<ArticleViewScreen> {
 
     switch (type) {
       case 'text':
+        String text = '';
+        double fontSize = 16.0;
+        FontWeight fontWeight = FontWeight.normal;
+
+        try {
+          final decoded = content is String ? jsonDecode(content) : content;
+          if (decoded is Map) {
+            text = decoded['text'] ?? '';
+            fontSize = (decoded['fontSize'] ?? 16.0).toDouble();
+            fontWeight = decoded['fontWeight'] == 'bold' ? FontWeight.bold : FontWeight.normal;
+          } else {
+            text = content.toString();
+          }
+        } catch (e) {
+          text = content.toString();
+        }
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 24),
           child: Text(
-            content,
-            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 16, height: 1.6),
+            text,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.8),
+              fontSize: fontSize,
+              fontWeight: fontWeight,
+              height: 1.6,
+            ),
           ),
         );
       case 'image':

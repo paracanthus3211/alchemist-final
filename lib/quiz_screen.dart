@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'dart:ui';
 import 'dart:math' as math;
 import 'widgets/background_wrapper.dart';
+import 'widgets/animated_progress_bar.dart';
 import 'services/api_service.dart';
 import 'admin/lab_curricula_screen.dart';
 import 'quiz/quiz_session_screen.dart';
+import 'quiz/loading_screen.dart';
+import 'models/user_model.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key});
@@ -15,11 +20,47 @@ class QuizScreen extends StatefulWidget {
 class _QuizScreenState extends State<QuizScreen> {
   List<dynamic> _chapters = [];
   bool _isLoading = true;
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
+  final ScrollController _scrollController = ScrollController();
+  int? _activeLevelId;
+  int _visibleChapterIndex = 0;
+  List<double> _chapterOffsets = [];
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _fetchCurriculum();
+  }
+
+
+
+  void _onScroll() {
+    if (_chapterOffsets.isEmpty) return;
+    double offset = _scrollController.offset;
+    int newIndex = 0;
+    for (int i = 0; i < _chapterOffsets.length; i++) {
+      if (offset >= _chapterOffsets[i] - 100) { 
+        newIndex = i;
+      }
+    }
+    if (newIndex != _visibleChapterIndex && newIndex >= 0 && newIndex < _chapters.length) {
+      setState(() {
+        _visibleChapterIndex = newIndex;
+      });
+    }
+  }
+
+  void _calculateOffsets() {
+    _chapterOffsets.clear();
+    double currentOffset = 0.0;
+    for (var ch in _chapters) {
+      _chapterOffsets.add(currentOffset);
+      final levels = (ch['levels'] as List?) ?? [];
+      final chapterHeight = 74.0 + (levels.length * 170.0);
+      currentOffset += chapterHeight;
+    }
   }
 
   Future<void> _fetchCurriculum() async {
@@ -28,14 +69,25 @@ class _QuizScreenState extends State<QuizScreen> {
       setState(() {
         _chapters = chapters;
         _isLoading = false;
+        _calculateOffsets();
+        final activeIndex = _chapters.indexWhere((ch) => ApiService.toInt(ch['chapter_progress']) < 100);
+        _visibleChapterIndex = activeIndex >= 0 ? activeIndex : (_chapters.isNotEmpty ? _chapters.length - 1 : 0);
       });
     }
+  }
+
+  Map<String, dynamic>? _getDisplayedChapter() {
+    if (_chapters.isEmpty) return null;
+    if (_visibleChapterIndex >= 0 && _visibleChapterIndex < _chapters.length) {
+      return _chapters[_visibleChapterIndex];
+    }
+    return _chapters.first;
   }
 
   Map<String, dynamic>? _getActiveChapter() {
     if (_chapters.isEmpty) return null;
     return _chapters.firstWhere(
-      (ch) => (ch['chapter_progress'] ?? 0) < 100,
+      (ch) => ApiService.toInt(ch['chapter_progress']) < 100,
       orElse: () => _chapters.last,
     );
   }
@@ -46,12 +98,25 @@ class _QuizScreenState extends State<QuizScreen> {
     
     final levels = (activeChapter['levels'] as List?) ?? [];
     final activeLevel = levels.firstWhere(
-      (l) => (l['progress'] ?? 0) < 100,
+      (l) => ApiService.toInt(l['progress']) < 100,
       orElse: () => levels.isNotEmpty ? levels.last : null,
     );
     
     if (activeLevel == null) return 'Expert';
     return activeLevel['name'] ?? 'Apprentice';
+  }
+
+  int _getCurrentLevelNumber() {
+    final activeChapter = _getActiveChapter();
+    if (activeChapter == null) return 0;
+    
+    final levels = (activeChapter['levels'] as List?) ?? [];
+    final activeLevel = levels.firstWhere(
+      (l) => ApiService.toInt(l['progress']) < 100,
+      orElse: () => levels.isNotEmpty ? levels.last : null,
+    );
+    
+    return ApiService.toInt(activeLevel?['order_index'] ?? 1);
   }
 
   int _getCurrentLevelProgress() {
@@ -60,11 +125,11 @@ class _QuizScreenState extends State<QuizScreen> {
     
     final levels = (activeChapter['levels'] as List?) ?? [];
     final activeLevel = levels.firstWhere(
-      (l) => (l['progress'] ?? 0) < 100,
+      (l) => ApiService.toInt(l['progress']) < 100,
       orElse: () => levels.isNotEmpty ? levels.last : null,
     );
     
-    return activeLevel?['progress'] ?? 0;
+    return ApiService.toInt(activeLevel?['progress']);
   }
 
   String _getCurrentLevelInfo() {
@@ -73,12 +138,58 @@ class _QuizScreenState extends State<QuizScreen> {
     
     final levels = (activeChapter['levels'] as List?) ?? [];
     final activeLevel = levels.firstWhere(
-      (l) => (l['progress'] ?? 0) < 100,
+      (l) => ApiService.toInt(l['progress']) < 100,
       orElse: () => levels.isNotEmpty ? levels.last : null,
     );
     
     if (activeLevel == null) return 'Maxed XP';
     return '${activeLevel['user_xp'] ?? 0}/${activeLevel['total_xp'] ?? 0} XP';
+  }
+
+  int _getChapterEarnedXp() {
+    final activeChapter = _getDisplayedChapter();
+    if (activeChapter == null) return 0;
+    final levels = (activeChapter['levels'] as List?) ?? [];
+    int total = 0;
+    for (var l in levels) {
+      total += ApiService.toInt(l['user_xp']);
+    }
+    return total;
+  }
+
+  int _getChapterTotalXp() {
+    final activeChapter = _getDisplayedChapter();
+    if (activeChapter == null) return 0;
+    final levels = (activeChapter['levels'] as List?) ?? [];
+    int total = 0;
+    for (var l in levels) {
+      total += ApiService.toInt(l['total_xp']);
+    }
+    return total;
+  }
+
+  Color? _parseColor(String? hexColor) {
+    if (hexColor == null || hexColor.isEmpty) return null;
+    hexColor = hexColor.replaceAll("#", "");
+    if (hexColor.length == 6) {
+      hexColor = "FF$hexColor";
+    }
+    if (hexColor.length == 8) {
+      return Color(int.parse("0x$hexColor"));
+    }
+    return null;
+  }
+
+  String _getAvatarUrl(AppUser? user) {
+    if (user == null || user.avatarUrl == null || user.avatarUrl!.isEmpty) {
+      return 'https://i.pravatar.cc/150?u=${user?.username ?? 'alchemist'}';
+    }
+    String url = user.avatarUrl!;
+    if (!url.startsWith('http')) {
+      final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
+      return '$baseUrl/$url';
+    }
+    return url;
   }
 
   @override
@@ -88,6 +199,15 @@ class _QuizScreenState extends State<QuizScreen> {
     const darkBg = Color(0xFF050F10);
     final user = ApiService().currentUser;
     final isAdmin = user?.isAdmin ?? false;
+
+    final displayedChapter = _getDisplayedChapter();
+    final String chapterColorHex = displayedChapter?['icon_emoji'] ?? '#00FBFF';
+    Color chapterColor = primaryCyan;
+    if (chapterColorHex.startsWith('#')) {
+      try {
+        chapterColor = Color(int.parse(chapterColorHex.replaceFirst('#', 'FF'), radix: 16));
+      } catch (_) {}
+    }
 
     return Scaffold(
       backgroundColor: darkBg,
@@ -107,278 +227,277 @@ class _QuizScreenState extends State<QuizScreen> {
         removeSafeAreaPadding: true,
         child: _isLoading 
           ? const Center(child: CircularProgressIndicator(color: primaryCyan))
-          : SingleChildScrollView(
+          : CustomScrollView(
+              controller: _scrollController,
               physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: [
-                  const SizedBox(height: 60),
-                  
-                  // --- TOP HEADER: PARACANTHUS ---
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.science_outlined, color: primaryCyan, size: 28),
-                            const SizedBox(width: 10),
-                            Text(
-                              'PARACANTHUS',
-                              style: TextStyle(
-                                color: primaryCyan.withOpacity(0.8),
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white24, width: 2),
-                          ),
-                          child: const CircleAvatar(
-                            radius: 18,
-                            backgroundImage: NetworkImage('https://i.pravatar.cc/150?u=admin'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 40),
-
-                  // --- CIRCULAR PROGRESS ---
-                  Center(
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: 200,
-                          height: 200,
-                          child: CustomPaint(
-                            painter: CircularProgressPainter(
-                              progress: (_getActiveChapter()?['chapter_progress'] ?? 0) / 100,
-                              color: accentLime,
-                              backgroundColor: Colors.white.withOpacity(0.05),
-                            ),
-                          ),
-                        ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${_getActiveChapter()?['chapter_progress'] ?? 0}%',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 56,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            Text(
-                              '${_getActiveChapter()?['title']?.toUpperCase() ?? 'CHAPTER'}\nPROGRESS LEARNING',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white38,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 40),
-
-                  // --- STATS CARDS ---
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      children: [
-                        _statCard('CURRENT XP', '${user?.totalXp ?? 0}', primaryCyan),
-                        const SizedBox(width: 16),
-                        _statCard('STREAK', '${user?.currentStreak ?? 0} Days', accentLime),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // --- CURRENT LEVEL BAR ---
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+              slivers: [
+                // Combined Sticky Header: Profile + Level Banner
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _StickyHeaderDelegate(
+                    height: 180,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'CURRENT LEVEL',
-                          style: TextStyle(
-                            color: primaryCyan,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Level ${_chapters.isNotEmpty ? 1 : 0} - ${_getCurrentLevelDisplayName()}',
-                                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${_getCurrentLevelProgress()}%',
-                              style: const TextStyle(color: accentLime, fontSize: 24, fontWeight: FontWeight.w900),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Stack(
-                          children: [
-                            Container(
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(5),
-                              ),
-                            ),
-                            FractionallySizedBox(
-                              widthFactor: (_getCurrentLevelProgress() / 100).clamp(0.0, 1.0),
-                              child: Container(
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(colors: [accentLime, primaryCyan]),
-                                  borderRadius: BorderRadius.circular(5),
-                                  boxShadow: [
-                                    BoxShadow(color: primaryCyan.withOpacity(0.3), blurRadius: 10),
-                                  ],
+                        // --- PROFILE ROW ---
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                          child: Row(
+                            children: [
+                              Text(
+                                (user?.username ?? 'ALCHEMIST').toUpperCase(),
+                                style: GoogleFonts.spaceGrotesk(
+                                  color: primaryCyan,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w300,
+                                  letterSpacing: 1.5,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _smallStat(Icons.hub_outlined, _getCurrentLevelInfo()),
-                            _smallStat(Icons.bolt, '${user?.currentStreak ?? 0} DAY STREAK'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-                  
-                  // --- DYNAMIC CURRICULUM MAP ---
-                  ..._chapters.map((chapter) {
-                    final levels = (chapter['levels'] as List?) ?? [];
-                    return Column(
-                      children: [
-                        const SizedBox(height: 30),
-                        // CHAPTER DIVIDER
-                        Row(
-                          children: [
-                            const Expanded(child: Divider(color: Colors.white24)),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                chapter['title']?.toLowerCase() ?? 'untitled chapter',
-                                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 16, fontWeight: FontWeight.w300),
+                              const Spacer(),
+                              // Streak
+                              Row(
+                                children: [
+                                  Image.asset('assets/streak.png', width: 20, height: 20),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${user?.streakCount ?? 0} DAY STREAK',
+                                    style: GoogleFonts.spaceGrotesk(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
                               ),
-                            ),
-                            const Expanded(child: Divider(color: Colors.white24)),
-                          ],
-                        ),
-                        const SizedBox(height: 40),
-                        // HEXAGON MAP FOR THIS CHAPTER
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 40),
-                          child: Stack(
-                            alignment: Alignment.topCenter,
-                            children: [
-                              CustomPaint(
-                                size: Size(double.infinity, levels.length * 160.0),
-                                painter: DashLinePainter(pointsCount: levels.length),
+                              const SizedBox(width: 16),
+                              // XP
+                              Row(
+                                children: [
+                                  Image.asset('assets/xp.png', width: 20, height: 20),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '${user?.totalXp ?? 0}',
+                                    style: GoogleFonts.spaceGrotesk(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
                               ),
-                              Column(
-                                children: List.generate(levels.length, (index) {
-                                  final lvl = levels[index];
-                                  final isLeft = index % 2 == 0;
-                                  final isDone = (lvl['progress'] ?? 0) >= 100;
-                                  final isActive = (lvl['progress'] ?? 0) > 0 && (lvl['progress'] ?? 0) < 100;
-                                  final isChapterLocked = chapter['is_locked'] == true;
-                                  final isLevelLocked = lvl['is_locked'] == true || isChapterLocked;
-                                  
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 60),
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        if (isLevelLocked) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Row(
-                                                children: [
-                                                  const Icon(Icons.lock, color: Colors.white, size: 16),
-                                                  const SizedBox(width: 12),
-                                                  Text(isChapterLocked 
-                                                    ? 'Chapter ini terkunci! Butuh ${chapter['xp_threshold']} XP.' 
-                                                    : 'XP Anda belum cukup! Butuh ${lvl['xp_required']} XP untuk level ini.'),
-                                                ],
-                                              ),
-                                              backgroundColor: Colors.redAccent,
-                                              behavior: SnackBarBehavior.floating,
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                            ),
-                                          );
-                                          return;
-                                        }
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => QuizSessionScreen(
-                                              questions: lvl['questions'] ?? [],
-                                              levelId: lvl['id'] ?? 0,
-                                              levelName: lvl['name'] ?? 'Level',
-                                            ),
-                                          ),
-                                        ).then((_) => _fetchCurriculum());
-                                      },
-                                      child: _hexNodeWithLabel(
-                                        lvl['name']?.toUpperCase() ?? 'UNTITLED', 
-                                        'LVL ${lvl['order_index'] ?? (index + 1)}', 
-                                        isDone ? accentLime : (isActive ? primaryCyan : (isLevelLocked ? Colors.redAccent.withOpacity(0.3) : Colors.white24)), 
-                                        isLeft ? Alignment.centerLeft : Alignment.centerRight, 
-                                        isDone,
-                                        isActive: isActive,
-                                        iconUrl: lvl['icon_url'],
-                                        isLocked: isLevelLocked,
-                                      ),
-                                    ),
-                                  );
-                                }),
+                              const SizedBox(width: 16),
+                              // Avatar
+                              // Avatar
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: _parseColor(user?.profileBgColor) ?? Colors.transparent,
+                                backgroundImage: NetworkImage(_getAvatarUrl(user)),
                               ),
                             ],
                           ),
                         ),
+                        
+                        // --- CHAPTER DATA DISPLAY (REVERTED TO ORIGINAL) ---
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F1B1D),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.white.withOpacity(0.03)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'CHAPTER ${_getDisplayedChapter()?['order_index'] ?? 1}',
+                                          style: GoogleFonts.spaceGrotesk(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          (_getDisplayedChapter()?['title'] ?? 'ALCHEMIST').toUpperCase(),
+                                          style: GoogleFonts.spaceGrotesk(
+                                            color: Colors.white.withOpacity(0.4),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            letterSpacing: 1.0,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                                      textBaseline: TextBaseline.alphabetic,
+                                      children: [
+                                        Text(
+                                          '${_getDisplayedChapter()?['chapter_progress'] ?? 0}',
+                                          style: GoogleFonts.spaceGrotesk(
+                                            color: chapterColor,
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '%',
+                                          style: GoogleFonts.spaceGrotesk(
+                                            color: Colors.white.withOpacity(0.4),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                // Progress Bar
+                                AnimatedProgressBar(
+                                  value: ((_getDisplayedChapter()?['chapter_progress'] ?? 0) / 100).clamp(0.0, 1.0),
+                                  height: 8,
+                                  backgroundColor: Colors.white.withOpacity(0.05),
+                                  foregroundGradient: LinearGradient(colors: [chapterColor.withOpacity(0.5), chapterColor]),
+                                  boxShadow: [BoxShadow(color: chapterColor.withOpacity(0.1), blurRadius: 4)],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Image.asset('assets/xp.png', width: 12, height: 12),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${_getChapterEarnedXp()}/${_getChapterTotalXp()} XP',
+                                      style: GoogleFonts.spaceGrotesk(
+                                        color: Colors.white.withOpacity(0.4),
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
-                    );
-                  }).toList(),
-                  
-                  const SizedBox(height: 100),
-                ],
-              ),
+                    ),
+                  ),
+                ),
+
+                // 3. Map Part (Scrollable)
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      ..._chapters.asMap().entries.map((entry) {
+                        final chapterIndex = entry.key;
+                        final chapter = entry.value;
+                        final levels = (chapter['levels'] as List?) ?? [];
+                        final String nodeColorHex = chapter['icon_emoji'] ?? '#00FBFF';
+                        Color nodeColor = const Color(0xFF00FBFF);
+                        if (nodeColorHex.startsWith('#')) {
+                          try {
+                            nodeColor = Color(int.parse(nodeColorHex.replaceFirst('#', 'FF'), radix: 16));
+                          } catch (_) {}
+                        }
+                        return Column(
+                          children: [
+                            const SizedBox(height: 10),
+                            // CHAPTER DIVIDER
+                            Row(
+                              children: [
+                                const Expanded(child: Divider(color: Colors.white24)),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    chapter['title']?.toLowerCase() ?? 'untitled chapter',
+                                    style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 16, fontWeight: FontWeight.w300),
+                                  ),
+                                ),
+                                const Expanded(child: Divider(color: Colors.white24)),
+                              ],
+                            ),
+                            const SizedBox(height: 40),
+                            // HEXAGON MAP FOR THIS CHAPTER
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 40),
+                              child: Stack(
+                                alignment: Alignment.topCenter,
+                                children: [
+                                  CustomPaint(
+                                    size: Size(double.infinity, levels.length * 160.0),
+                                    painter: DashLinePainter(pointsCount: levels.length),
+                                  ),
+                                  Column(
+                                    children: List.generate(levels.length, (index) {
+                                      final lvl = levels[index];
+                                      final isLeft = index % 2 == 0;
+                                      final isDone = ApiService.toInt(lvl['progress']) >= 100;
+                                      final isActive = ApiService.toInt(lvl['progress']) > 0 && ApiService.toInt(lvl['progress']) < 100;
+                                      final isChapterLocked = chapter['is_locked'] == true;
+                                      
+                                      bool isPrevDone = true;
+                                      if (index > 0) {
+                                        final prevLvl = levels[index - 1];
+                                        isPrevDone = ApiService.toInt(prevLvl['progress']) >= 100;
+                                      } else if (chapterIndex > 0) {
+                                        final prevChapter = _chapters[chapterIndex - 1];
+                                        final prevChapterLevels = (prevChapter['levels'] as List?) ?? [];
+                                        if (prevChapterLevels.isNotEmpty) {
+                                          final prevLvl = prevChapterLevels.last;
+                                          isPrevDone = ApiService.toInt(prevLvl['progress']) >= 100;
+                                        }
+                                      }
+                                      
+                                      final int xpThreshold = ApiService.toInt(lvl['xp_threshold'] ?? lvl['xp_required']);
+                                      final int userXp = ApiService().currentUser?.totalXp ?? 0;
+                                      
+                                      final isLevelLocked = isChapterLocked || 
+                                          lvl['is_locked'] == true || 
+                                          !isPrevDone || 
+                                          (xpThreshold > 0 && userXp < xpThreshold);
+                                      
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 60),
+                                        child: _HexPressable(
+                                          onTap: (context) {
+                                            Scrollable.ensureVisible(
+                                              context,
+                                              duration: const Duration(milliseconds: 500),
+                                              curve: Curves.easeInOut,
+                                              alignment: 0.3,
+                                            );
+                                            _showLevelPopup(context, lvl, chapter['title'] ?? 'Chapter', levels.length, isLevelLocked, isPrevDone, nodeColor, chapter['is_locked'] == true);
+                                          },
+                                          builder: (isPressed) => _hexNodeWithLabel(
+                                            lvl['name']?.toUpperCase() ?? 'UNTITLED', 
+                                            'LVL ${ApiService.toInt(lvl['order_index'] ?? (index + 1))}', 
+                                            isLevelLocked ? const Color(0xFF2D3234) : nodeColor, 
+                                            isLeft ? Alignment.centerLeft : Alignment.centerRight, 
+                                            isDone,
+                                            isActive: isActive,
+                                            iconUrl: lvl['icon_url'],
+                                            isLocked: isLevelLocked,
+                                            link: _activeLevelId == lvl['id'] ? _layerLink : LayerLink(),
+                                            isPressed: isPressed,
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
+              ],
             ),
       ),
     );
@@ -414,20 +533,25 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
-  Widget _smallStat(IconData icon, String text) {
+  Widget _smallStat(String assetPath, String text) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: const Color(0xFFCCFF00)),
-        const SizedBox(width: 4),
+        Image.asset(assetPath, width: 20, height: 20),
+        const SizedBox(width: 8),
         Text(
           text,
-          style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.5,
+          ),
         ),
       ],
     );
   }
 
-  Widget _hexNodeWithLabel(String label, String lvl, Color color, Alignment alignment, bool isDone, {bool isActive = false, bool isLocked = false, bool isSpecial = false, String? iconUrl}) {
+  Widget _hexNodeWithLabel(String label, String lvl, Color color, Alignment alignment, bool isDone, {bool isActive = false, bool isLocked = false, bool isSpecial = false, String? iconUrl, LayerLink? link, bool isPressed = false}) {
     return Align(
       alignment: alignment,
       child: Column(
@@ -436,47 +560,58 @@ class _QuizScreenState extends State<QuizScreen> {
           Stack(
             alignment: Alignment.topRight,
             children: [
-              SizedBox(
-                width: 100,
-                height: 110,
-                child: CustomPaint(
-                  painter: HexagonPainter(
-                    color: color,
-                    isFill: isDone || isActive,
-                    glow: isActive,
-                  ),
-                  child: Center(
-                    child: isSpecial 
-                      ? const Icon(Icons.stars_rounded, color: Colors.white24, size: 40)
-                      : (iconUrl != null && iconUrl.isNotEmpty) 
-                        ? Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Image.network(
-                              iconUrl, 
-                              fit: BoxFit.contain,
-                              errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.red),
-                            ),
-                          )
-                        : Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isDone) const Icon(Icons.check, color: Colors.black, size: 24),
-                              if (isActive) const Icon(Icons.bolt_rounded, color: Colors.black, size: 32),
-                              if (isLocked) const Icon(Icons.lock_outline, color: Colors.redAccent, size: 24),
-                              if (!isDone && !isActive && !isLocked) const Icon(Icons.lock_outline, color: Colors.white24, size: 24),
-                              if (!isSpecial) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  lvl,
-                                  style: TextStyle(
-                                    color: isDone || isActive ? Colors.black.withOpacity(0.7) : (isLocked ? Colors.redAccent.withOpacity(0.5) : Colors.white24),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w900
-                                  ),
+              CompositedTransformTarget(
+                link: link ?? LayerLink(),
+                child: SizedBox(
+                  width: 100,
+                  height: 110,
+                  child: CustomPaint(
+                    painter: HexagonPainter(
+                      color: color,
+                      isFill: isDone || isActive || isLocked || !isLocked,
+                      glow: isActive,
+                      isPressed: isPressed,
+                    ),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 100),
+                      padding: EdgeInsets.only(
+                        top: isPressed ? 7.0 : 0.0,
+                        bottom: isPressed ? 0.0 : 7.0,
+                      ),
+                      child: Center(
+                        child: isSpecial 
+                          ? const Icon(Icons.stars_rounded, color: Colors.white24, size: 40)
+                          : (iconUrl != null && iconUrl.isNotEmpty) 
+                            ? Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Image.network(
+                                  iconUrl, 
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.red),
                                 ),
-                              ]
-                            ],
-                          ),
+                              )
+                            : Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isDone) const Icon(Icons.check, color: Colors.black, size: 24),
+                                  if (isActive) const Icon(Icons.bolt_rounded, color: Colors.black, size: 32),
+                                  if (isLocked) const Icon(Icons.lock_outline, color: Colors.white70, size: 24),
+                                  if (!isDone && !isActive && !isLocked) const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 32),
+                                  if (!isSpecial) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      lvl,
+                                      style: TextStyle(
+                                        color: isDone || isActive || !isLocked ? Colors.black.withOpacity(0.7) : Colors.white70,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900
+                                      ),
+                                    ),
+                                  ]
+                                ],
+                              ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -513,6 +648,465 @@ class _QuizScreenState extends State<QuizScreen> {
       ),
     );
   }
+  void _showLevelPopup(BuildContext context, dynamic lvl, String chapterTitle, int totalLevels, bool isLevelLocked, bool isPrevDone, Color themeColor, bool isChapterLocked) {
+    _hideLevelPopup();
+
+    setState(() {
+      _activeLevelId = ApiService.toInt(lvl['id']);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      
+      final int index = ApiService.toInt(lvl['order_index'] ?? 1) - 1;
+      final bool isLeft = index % 2 == 0;
+      
+      final screenWidth = MediaQuery.of(context).size.width;
+      final double calculatedWidth = screenWidth - 40.0;
+      final double popupWidth = calculatedWidth > 400.0 ? 400.0 : calculatedWidth;
+      
+      double followerOffsetX;
+      double triangleX;
+      
+      if (isLeft) {
+        followerOffsetX = -20.0;
+        triangleX = 50.0 - followerOffsetX;
+      } else {
+        followerOffsetX = 120.0 - popupWidth;
+        triangleX = 50.0 - followerOffsetX;
+      }
+
+      final int xpThreshold = (lvl['xp_threshold'] ?? lvl['xp_required'] ?? 0) as int;
+      final int userXp = ApiService().currentUser?.totalXp ?? 0;
+      
+      _overlayEntry = OverlayEntry(
+        builder: (context) => Stack(
+          children: [
+            GestureDetector(
+              onTap: _hideLevelPopup,
+              behavior: HitTestBehavior.opaque,
+              child: Container(color: Colors.transparent),
+            ),
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(followerOffsetX, 110), 
+              child: Material(
+                color: Colors.transparent,
+                child: LevelInfoPopup(
+                      chapterTitle: chapterTitle,
+                      levelName: lvl['name'] ?? 'Untitled',
+                      orderIndex: ApiService.toInt(lvl['order_index'] ?? 1),
+                      totalLevelsInChapter: totalLevels,
+                      isLocked: isLevelLocked,
+                      xpThreshold: xpThreshold,
+                      userXp: userXp,
+                      isPrevDone: isPrevDone,
+                      popupWidth: popupWidth,
+                      triangleX: triangleX,
+                      themeColor: themeColor,
+                      onStart: isLevelLocked ? null : () {
+                    _hideLevelPopup();
+                    Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) => QuizLoadingScreen(
+                          onLoadingComplete: () {
+                            Navigator.pushReplacement(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (context, animation, secondaryAnimation) => QuizSessionScreen(
+                                  questions: lvl['questions'] ?? [],
+                                  levelId: ApiService.toInt(lvl['id']),
+                                  levelName: lvl['name'] ?? 'Level',
+                                  timerLimit: ApiService.toInt(lvl['timer_limit']),
+                                ),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  const begin = Offset(0.0, 1.0);
+                                  const end = Offset.zero;
+                                  const curve = Curves.easeOutCubic;
+                                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                  return SlideTransition(position: animation.drive(tween), child: child);
+                                },
+                                transitionDuration: const Duration(milliseconds: 600),
+                              ),
+                            );
+                          },
+                        ),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(0.0, 1.0);
+                          const end = Offset.zero;
+                          const curve = Curves.easeOutCubic;
+                          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                          return SlideTransition(position: animation.drive(tween), child: child);
+                        },
+                        transitionDuration: const Duration(milliseconds: 600),
+                      ),
+                    ).then((_) => _fetchCurriculum());
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      Overlay.of(context).insert(_overlayEntry!);
+    });
+  }
+
+  void _hideLevelPopup() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    if (mounted) {
+      setState(() {
+        _activeLevelId = null;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _hideLevelPopup();
+    super.dispose();
+  }
+}
+
+class LevelInfoPopup extends StatefulWidget {
+  final String chapterTitle;
+  final String levelName;
+  final int orderIndex;
+  final int totalLevelsInChapter;
+  final double popupWidth;
+  final double triangleX;
+  final VoidCallback? onStart;
+  final bool isLocked;
+  final int xpThreshold;
+  final int userXp;
+  final bool isPrevDone;
+  final Color themeColor;
+
+  const LevelInfoPopup({
+    super.key,
+    required this.chapterTitle,
+    required this.levelName,
+    required this.orderIndex,
+    required this.totalLevelsInChapter,
+    required this.popupWidth,
+    required this.triangleX,
+    required this.onStart,
+    this.isLocked = false,
+    this.xpThreshold = 0,
+    this.userXp = 0,
+    this.isPrevDone = true,
+    this.themeColor = const Color(0xFF00FBFF),
+  });
+
+  @override
+  State<LevelInfoPopup> createState() => _LevelInfoPopupState();
+}
+
+class _LevelInfoPopupState extends State<LevelInfoPopup> with SingleTickerProviderStateMixin {
+  bool _isPressed = false;
+  late AnimationController _animCtrl;
+  late Animation<double> _scaleAnim;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _scaleAnim = CurvedAnimation(
+      parent: _animCtrl,
+      curve: Curves.elasticOut,
+    );
+    _fadeAnim = CurvedAnimation(
+      parent: _animCtrl,
+      curve: Curves.easeIn,
+    );
+    _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  Widget build(BuildContext context) {
+    final tealColor = widget.themeColor;
+    // Use gray color for banner when level is locked
+    final bannerColor = widget.isLocked ? const Color(0xFF757575) : tealColor;
+    
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: ScaleTransition(
+        scale: _scaleAnim,
+        child: SizedBox(
+          width: widget.popupWidth,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Triangular Pointer pointing UP (Dynamic position)
+              Padding(
+                padding: EdgeInsets.only(left: widget.triangleX - 15), // -15 for half width of triangle
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: CustomPaint(
+                    size: const Size(30, 25),
+                    painter: TrianglePainter(color: bannerColor, pointingUp: true),
+                  ),
+                ),
+              ),
+              // Bubble Content
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: bannerColor,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'CHAPTER ${widget.orderIndex} ${widget.chapterTitle.toUpperCase()}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.0,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${widget.orderIndex} OUT OF ${widget.totalLevelsInChapter} LEVEL',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.levelName.toUpperCase(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.0,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                if (widget.isLocked) ...[
+                  const SizedBox(height: 8),
+                  Builder(
+                    builder: (context) {
+                      final bool needsXp = widget.xpThreshold > 0 && widget.userXp < widget.xpThreshold;
+                      final bool needsPrev = !widget.isPrevDone;
+                      
+                      if (needsXp && needsPrev) {
+                        return Column(
+                          children: [
+                            Text(
+                              'REACH ${widget.xpThreshold} XP TO OPEN THIS LEVEL &',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'UNLOCK PREVIOUS LEVEL',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
+                            ),
+                          ],
+                        );
+                      } else if (needsXp) {
+                        return Text(
+                          'REACH ${widget.xpThreshold} XP TO OPEN THIS LEVEL',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
+                        );
+                      } else if (needsPrev) {
+                        return const Text(
+                          'UNLOCK PREVIOUS LEVEL',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
+                        );
+                      } else {
+                        return const Text(
+                          'LEVEL LOCKED',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
+                        );
+                      }
+                    },
+                  ),
+                ],
+                const SizedBox(height: 16),
+                // Button based on PNG designs
+                widget.isLocked
+                  // ── LOCKED STATE ───────────────────────────────
+                  ? Container(
+                      width: widget.popupWidth * 0.85,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border(bottom: BorderSide(color: tealColor.withOpacity(0.5), width: 4)),
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: CustomPaint(
+                              size: const Size(double.infinity, 30),
+                              painter: GlossyStripesPainter(opacity: 0.15, color: tealColor),
+                            ),
+                          ),
+                          const Icon(Icons.lock_outline, color: Colors.grey, size: 14),
+                        ],
+                      ),
+                    )
+                  // ── UNLOCKED STATE ─────────────────────────────
+                  : GestureDetector(
+                      onTapDown: (_) => setState(() => _isPressed = true),
+                      onTapUp: (_) => setState(() => _isPressed = false),
+                      onTapCancel: () => setState(() => _isPressed = false),
+                      onTap: widget.onStart,
+                      child: Container(
+                        width: widget.popupWidth * 0.85,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: !_isPressed 
+                            ? Border(bottom: BorderSide(color: tealColor.withOpacity(0.5), width: 4))
+                            : null,
+                          boxShadow: [
+                            if (!_isPressed) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2)),
+                          ],
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: CustomPaint(
+                                size: const Size(double.infinity, 30),
+                                painter: GlossyStripesPainter(opacity: _isPressed ? 0.08 : 0.15, color: tealColor),
+                              ),
+                            ),
+                            Text(
+                              'START LESSON',
+                              style: TextStyle(
+                                color: tealColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.5,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+);
+}
+}
+
+class TrianglePainter extends CustomPainter {
+  final Color color;
+  final bool pointingUp;
+  TrianglePainter({required this.color, this.pointingUp = false});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final path = Path();
+    if (pointingUp) {
+      path.moveTo(size.width / 2, 0);
+      path.lineTo(0, size.height);
+      path.lineTo(size.width, size.height);
+    } else {
+      path.moveTo(size.width / 2, size.height);
+      path.lineTo(0, 0);
+      path.lineTo(size.width, 0);
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
+
+class GlossyStripesPainter extends CustomPainter {
+  final double opacity;
+  final Color color;
+  GlossyStripesPainter({this.opacity = 0.12, this.color = const Color(0xFF00FBFF)});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withOpacity(opacity)
+      ..strokeWidth = 15
+      ..style = PaintingStyle.stroke;
+
+    const spacing = 40.0;
+    for (double i = -size.height * 2; i < size.width * 2; i += spacing) {
+      canvas.drawLine(
+        Offset(i, 0),
+        Offset(i + size.height, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant GlossyStripesPainter oldDelegate) => oldDelegate.opacity != opacity;
+}
+
+
+class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double height;
+  _StickyHeaderDelegate({required this.child, this.height = 180.0});
+
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Material(
+      color: const Color(0xFF050F10),
+      elevation: 0, // Keep it flat but as a Material layer
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StickyHeaderDelegate oldDelegate) => true;
 }
 
 class CircularProgressPainter extends CustomPainter {
@@ -573,35 +1167,56 @@ class HexagonPainter extends CustomPainter {
   final Color color;
   final bool isFill;
   final bool glow;
+  final bool isPressed;
+  static const double _depth = 7.0;
 
-  HexagonPainter({required this.color, required this.isFill, this.glow = false});
+  HexagonPainter({required this.color, required this.isFill, this.glow = false, this.isPressed = false});
+
+  List<Offset> _hexPoints(double cx, double cy, double radius, double dy) {
+    return List.generate(6, (i) {
+      final angle = (math.pi / 180) * (60 * i - 30);
+      return Offset(cx + radius * math.cos(angle), cy + radius * math.sin(angle) + dy);
+    });
+  }
+
+  Path _buildPath(List<Offset> pts) {
+    final path = Path();
+    for (int i = 0; i < pts.length; i++) {
+      if (i == 0) path.moveTo(pts[i].dx, pts[i].dy);
+      else path.lineTo(pts[i].dx, pts[i].dy);
+    }
+    path.close();
+    return path;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-    final cy = size.height / 2;
-    final radius = size.width / 2;
+    final cy = size.height / 2 - _depth / 2;
+    final radius = size.width / 2 - 2;
+    final topDy = isPressed ? _depth : 0.0;
 
-    final path = Path();
-    for (int i = 0; i < 6; i++) {
-      double angle = (math.pi / 180) * (60 * i - 30);
-      double x = cx + radius * math.cos(angle);
-      double y = cy + radius * math.sin(angle);
-      if (i == 0) path.moveTo(x, y);
-      else path.lineTo(x, y);
+    // Bottom depth face (only for filled hexagons)
+    if (isFill) {
+      final bottomPath = _buildPath(_hexPoints(cx, cy, radius, _depth));
+      final hsl = HSLColor.fromColor(color);
+      final darkColor = hsl.withLightness((hsl.lightness * 0.55).clamp(0.0, 1.0)).toColor();
+      canvas.drawPath(bottomPath, Paint()..color = darkColor);
     }
-    path.close();
 
-    if (glow) {
-      canvas.drawPath(path, Paint()
+    // Top face
+    final topPath = _buildPath(_hexPoints(cx, cy, radius, topDy));
+
+    if (glow && !isPressed) {
+      canvas.drawPath(topPath, Paint()
         ..color = color.withOpacity(0.4)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15));
     }
 
     if (isFill) {
-      canvas.drawPath(path, Paint()..color = color);
+      canvas.drawPath(topPath, Paint()..color = color);
     } else {
-      canvas.drawPath(path, Paint()
+      canvas.drawPath(topPath, Paint()
         ..color = color
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3);
@@ -609,7 +1224,10 @@ class HexagonPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant HexagonPainter oldDelegate) =>
+    oldDelegate.isPressed != isPressed ||
+    oldDelegate.color != color ||
+    oldDelegate.isFill != isFill;
 }
 
 class DashLinePainter extends CustomPainter {
@@ -665,3 +1283,25 @@ class DashLinePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+/// Stateful wrapper that tracks press state and passes isPressed to the builder.
+class _HexPressable extends StatefulWidget {
+  final void Function(BuildContext context) onTap;
+  final Widget Function(bool isPressed) builder;
+  const _HexPressable({required this.onTap, required this.builder});
+  @override
+  State<_HexPressable> createState() => _HexPressableState();
+}
+
+class _HexPressableState extends State<_HexPressable> {
+  bool _isPressed = false;
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: () => widget.onTap(context),
+      child: widget.builder(_isPressed),
+    );
+  }
+}

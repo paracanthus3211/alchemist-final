@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models/daily_task_model.dart';
 import 'services/api_service.dart';
+import 'widgets/animated_progress_bar.dart';
 import 'daily_task_form_sheet.dart';
 
 /// Admin-only screen: "Daily Research Tasks" management panel (Lab Operations view).
@@ -35,7 +36,7 @@ class _DailyTaskManagementScreenState
   Future<void> _load() async {
     setState(() => _loading = true);
     final results = await Future.wait([
-      _api.getDailyTasks(),
+      _api.getDailyTasks(mode: 'admin'),
       _api.getDailyTaskStats(),
     ]);
     setState(() {
@@ -405,8 +406,14 @@ class _DailyTaskManagementScreenState
       case 'DAILY_LOGIN':
         typeIcon = Icons.login_rounded;
         break;
+      case 'SCORE':
+        typeIcon = Icons.stars_rounded;
+        break;
+      case 'FINISH_LESSONS':
+        typeIcon = Icons.quiz_rounded;
+        break;
       default:
-        typeIcon = Icons.menu_book_rounded;
+        typeIcon = Icons.science_outlined;
     }
 
     return Container(
@@ -476,16 +483,11 @@ class _DailyTaskManagementScreenState
           ),
           const SizedBox(height: 12),
           // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: task.isCompleted ? 1.0 : progress,
-              backgroundColor: Colors.white.withValues(alpha: 0.06),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                task.isCompleted ? Colors.white24 : _cyan,
-              ),
-              minHeight: 5,
-            ),
+          AnimatedProgressBar(
+            value: task.isCompleted ? 1.0 : progress,
+            height: 5,
+            backgroundColor: Colors.white.withValues(alpha: 0.06),
+            foregroundColor: task.isCompleted ? Colors.white24 : _cyan,
           ),
           const SizedBox(height: 10),
           Row(

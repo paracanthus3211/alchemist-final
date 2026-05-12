@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'profile_screen.dart';
 import 'services/api_service.dart';
 import 'widgets/background_wrapper.dart';
 
@@ -85,23 +87,18 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
           children: [
             // ─── HEADER ───
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'SOCIAL LAB',
-                    style: TextStyle(
+                    style: GoogleFonts.spaceGrotesk(
                       color: _cyan,
-                      fontSize: 20,
+                      fontSize: 24,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
+                      letterSpacing: 2.0,
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), shape: BoxShape.circle),
-                    child: const Icon(Icons.search, color: Colors.white54, size: 20),
                   ),
                 ],
               ),
@@ -119,12 +116,12 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
                 indicatorSize: TabBarIndicatorSize.label,
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white38,
-                labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                labelStyle: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.0),
+                unselectedLabelStyle: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700, fontSize: 13),
                 tabs: const [
-                  Tab(text: 'Add friends'),
-                  Tab(text: 'your friends'),
-                  Tab(text: 'Requests'),
+                  Tab(text: 'ADD FRIENDS'),
+                  Tab(text: 'YOUR FRIENDS'),
+                  Tab(text: 'REQUESTS'),
                 ],
               ),
             ),
@@ -173,6 +170,9 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
                         rank: u['rank_title'] ?? 'Novice',
                         avatarUrl: u['avatar_url'],
                         rankColor: _cyan,
+                        onTap: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: int.tryParse(uid))));
+                        },
                         trailing: GestureDetector(
                           onTap: sent ? null : () => _sendRequest(uid),
                           child: Container(
@@ -228,6 +228,9 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
                         avatarUrl: f['avatar_url'],
                         rankColor: _cyan,
                         isOnline: f['is_online'] == true,
+                        onTap: () {
+                           Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: f['id'])));
+                        },
                         trailing: Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(8)),
@@ -338,65 +341,69 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
     required Color rankColor,
     required Widget trailing,
     bool isOnline = false,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-      ),
-      child: Row(
-        children: [
-          // Avatar
-          Stack(
-            children: [
-              Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.white.withOpacity(0.06),
-                  image: avatarUrl != null ? DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover) : null,
-                ),
-                child: avatarUrl == null ? const Icon(Icons.person, color: Colors.white24, size: 30) : null,
-              ),
-              // Level badge
-              Positioned(
-                bottom: 0, left: 0, right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D1117).withOpacity(0.9),
-                    borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(10), bottomRight: Radius.circular(10)),
-                  ),
-                  child: Text(level, textAlign: TextAlign.center, style: const TextStyle(color: _cyan, fontSize: 9, fontWeight: FontWeight.w800)),
-                ),
-              ),
-              if (isOnline)
-                Positioned(
-                  top: 2, right: 2,
-                  child: Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle, border: Border.all(color: _cardBg, width: 1.5))),
-                ),
-            ],
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
+        ),
+        child: Row(
+          children: [
+            // Avatar
+            Stack(
               children: [
-                Text(name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: rankColor.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
-                  child: Text(rank.toUpperCase(), style: TextStyle(color: rankColor, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                  width: 56, height: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.white.withOpacity(0.06),
+                    image: avatarUrl != null ? DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover) : null,
+                  ),
+                  child: avatarUrl == null ? const Icon(Icons.person, color: Colors.white24, size: 30) : null,
                 ),
+                // Level badge
+                Positioned(
+                  bottom: 0, left: 0, right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D1117).withOpacity(0.9),
+                      borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(10), bottomRight: Radius.circular(10)),
+                    ),
+                    child: Text(level, textAlign: TextAlign.center, style: const TextStyle(color: _cyan, fontSize: 9, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+                if (isOnline)
+                  Positioned(
+                    top: 2, right: 2,
+                    child: Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle, border: Border.all(color: _cardBg, width: 1.5))),
+                  ),
               ],
             ),
-          ),
-          trailing,
-        ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: rankColor.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+                    child: Text(rank.toUpperCase(), style: TextStyle(color: rankColor, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                  ),
+                ],
+              ),
+            ),
+            trailing,
+          ],
+        ),
       ),
     );
   }

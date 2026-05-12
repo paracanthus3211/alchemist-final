@@ -8,9 +8,11 @@ use App\Models\Level;
 use App\Models\Question;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Traits\UpdatesDailyTasks;
 
 class CurriculumController extends Controller
 {
+    use UpdatesDailyTasks;
     public function index(Request $request)
     {
         $user = $request->user('sanctum');
@@ -99,6 +101,7 @@ class CurriculumController extends Controller
             'xp_required' => 'required|integer',
             'icon_url' => 'nullable|string',
             'order_index' => 'nullable|integer',
+            'timer_limit' => 'nullable|integer',
         ]);
 
         $level = Level::create($validated);
@@ -304,6 +307,7 @@ class CurriculumController extends Controller
             'xp_required' => 'required|integer',
             'icon_url' => 'nullable|string',
             'order_index' => 'nullable|integer',
+            'timer_limit' => 'nullable|integer',
         ]);
         $level->update($validated);
         return response()->json(['success' => true, 'message' => 'Level updated successfully', 'data' => $level]);
@@ -313,5 +317,41 @@ class CurriculumController extends Controller
     {
         $question->delete();
         return response()->json(['success' => true, 'message' => 'Question deleted successfully']);
+    }
+
+    public function saveLevelCompletion(Request $request, $levelId)
+    {
+        $request->validate([
+            'score' => 'required|integer|min:0|max:100',
+            'completion_time_seconds' => 'required|integer|min:0',
+            'wrong_answers_count' => 'required|integer|min:0',
+        ]);
+
+        $user = $request->user();
+        
+        $completion = \App\Models\UserLevelCompletion::updateOrCreate(
+            ['user_id' => $user->id, 'level_id' => $levelId],
+            [
+                'score' => $request->score,
+                'completion_time_seconds' => $request->completion_time_seconds,
+                'wrong_answers_count' => $request->wrong_answers_count,
+            ]
+        );
+
+        // Update Daily Task Progress for SCORE
+        $this->_incrementDailyTaskProgress($user, 'SCORE', $request->score);
+        
+        // Update Daily Task Progress for FINISH_LESSONS
+        $this->_incrementDailyTaskProgress($user, 'FINISH_LESSONS', 1, $levelId);
+        
+        // Note: XP is usually awarded via AuthController@addXp in the app, 
+        // but we can also trigger GAIN_XP here if we know the amount.
+        // For now, FINISH_LESSONS is the main one for "checking off" quiz tasks.
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Level completion stats saved',
+            'data' => $completion
+        ]);
     }
 }

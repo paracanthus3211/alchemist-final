@@ -15,12 +15,14 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
   final _nameCtrl = TextEditingController();
   final _chapterCtrl = TextEditingController();
   final _xpCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
   
   Uint8List? _imageBytes;
   String? _fileName;
 
   List<dynamic> _ranks = [];
   bool _isLoading = true;
+  String? _editingRankId;
 
   static const _cyan = Color(0xFF00FBFF);
   static const _cardBg = Color(0xFF161D1E);
@@ -71,7 +73,7 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
     }
 
     final xpVal = int.tryParse(_xpCtrl.text) ?? 0;
-    final error = await ApiService().createRank({
+    final rankData = {
       'name': _nameCtrl.text,
       'chapter': _chapterCtrl.text,
       'xp_threshold': xpVal,
@@ -79,7 +81,15 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
       'xp_required': xpVal,
       if (iconUrl != null) 'icon_url': iconUrl,
       if (iconUrl != null) 'image_url': iconUrl,
-    });
+    };
+
+    String? error;
+    if (_editingRankId != null) {
+      final success = await ApiService().updateRank(int.parse(_editingRankId!), rankData);
+      error = success ? null : "Update failed";
+    } else {
+      error = await ApiService().createRank(rankData);
+    }
 
     if (mounted) {
       if (error == null) {
@@ -89,10 +99,11 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
         setState(() {
           _imageBytes = null;
           _fileName = null;
+          _editingRankId = null;
         });
         _fetchRanks();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Rank forged successfully!'), backgroundColor: _cyan)
+          SnackBar(content: Text(_editingRankId == null ? 'Rank forged successfully!' : 'Rank updated successfully!'), backgroundColor: _cyan)
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -107,8 +118,32 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
     if (intId == null) return;
     final success = await ApiService().deleteRank(intId);
     if (success && mounted) {
+      if (_editingRankId == id) {
+        setState(() {
+          _editingRankId = null;
+          _nameCtrl.clear();
+          _chapterCtrl.clear();
+          _xpCtrl.clear();
+        });
+      }
       _fetchRanks();
     }
+  }
+
+  void _handleEdit(dynamic rank) {
+    setState(() {
+      _editingRankId = rank['id'].toString();
+      _nameCtrl.text = rank['name'] ?? '';
+      _chapterCtrl.text = rank['chapter']?.toString() ?? '';
+      _xpCtrl.text = (rank['xp_threshold'] ?? 0).toString();
+    });
+    
+    // Scroll to top to see the form
+    _scrollCtrl.animateTo(
+      0, 
+      duration: const Duration(milliseconds: 500), 
+      curve: Curves.easeInOut
+    );
   }
 
   @override
@@ -123,8 +158,6 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Row(
                 children: [
-                  const Icon(Icons.science_outlined, color: _cyan, size: 28),
-                  const SizedBox(width: 12),
                   const Text('Edit Rank', style: TextStyle(color: _cyan, fontSize: 22, fontWeight: FontWeight.w900)),
                   const Spacer(),
                   const CircleAvatar(radius: 18, backgroundImage: NetworkImage('https://i.pravatar.cc/150?u=admin')),
@@ -134,6 +167,7 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
             
             Expanded(
               child: SingleChildScrollView(
+                controller: _scrollCtrl,
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,7 +192,20 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
                             children: [
                               const Icon(Icons.add_circle_outline, color: _cyan, size: 24),
                               const SizedBox(width: 12),
-                              const Text('Add New Rank', style: TextStyle(color: _cyan, fontSize: 18, fontWeight: FontWeight.bold)),
+                              Text(_editingRankId == null ? 'Add New Rank' : 'Edit Rank #${_editingRankId}', 
+                                style: const TextStyle(color: _cyan, fontSize: 18, fontWeight: FontWeight.bold)),
+                              if (_editingRankId != null) ...[
+                                const Spacer(),
+                                IconButton(
+                                  onPressed: () => setState(() {
+                                    _editingRankId = null;
+                                    _nameCtrl.clear();
+                                    _chapterCtrl.clear();
+                                    _xpCtrl.clear();
+                                  }),
+                                  icon: const Icon(Icons.close, color: Colors.white38, size: 20),
+                                )
+                              ]
                             ],
                           ),
                           const SizedBox(height: 24),
@@ -243,12 +290,13 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
                                 borderRadius: BorderRadius.circular(12),
                                 boxShadow: [BoxShadow(color: _cyan.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5))],
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.auto_fix_high, color: Colors.black, size: 20),
-                                  SizedBox(width: 12),
-                                  Text('Forge New Rank', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 16)),
+                                  Icon(_editingRankId == null ? Icons.auto_fix_high : Icons.save_outlined, color: Colors.black, size: 20),
+                                  const SizedBox(width: 12),
+                                  Text(_editingRankId == null ? 'Forge New Rank' : 'Update Rank Registry', 
+                                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 16)),
                                 ],
                               ),
                             ),
@@ -317,51 +365,59 @@ class _RankEditorScreenState extends State<RankEditorScreen> {
 
   Widget _hierarchyCard(dynamic rank) {
     final color = _getRankColor(rank['name']);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border(bottom: BorderSide(color: color, width: 3)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48, height: 48,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10)),
-            child: Icon(_getRankIcon(rank['name']), color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(child: Text(rank['name'], style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: 8),
-                    Text('ID: ALC-${rank['id'].toString().padLeft(2, '0')}', style: TextStyle(color: _cyan.withOpacity(0.4), fontSize: 10, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.menu_book, color: Colors.white24, size: 12),
-                    const SizedBox(width: 4),
-                    Text('Ch. ${rank['chapter'] ?? '1'}', style: const TextStyle(color: Colors.white24, fontSize: 11)),
-                    const SizedBox(width: 12),
-                    const Icon(Icons.bolt, color: Colors.white24, size: 12),
-                    const SizedBox(width: 4),
-                    Text('${rank['xp_threshold'] ?? rank['min_xp'] ?? rank['xp_required'] ?? 0} XP', style: const TextStyle(color: Colors.white24, fontSize: 11)),
-                  ],
-                ),
-              ],
+    return GestureDetector(
+      onTap: () => _handleEdit(rank),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border(bottom: BorderSide(color: color, width: 3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10)),
+              child: (rank['icon_url'] != null && rank['icon_url'].startsWith('http'))
+                ? Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Image.network(rank['icon_url']),
+                  )
+                : Icon(_getRankIcon(rank['name']), color: color, size: 24),
             ),
-          ),
-          IconButton(onPressed: () {}, icon: const Icon(Icons.edit_outlined, color: Colors.white24, size: 20)),
-          IconButton(onPressed: () => _handleDelete(rank['id'].toString()), icon: const Icon(Icons.delete_outline, color: Colors.white24, size: 20)),
-        ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(child: Text(rank['name'], style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis)),
+                      const SizedBox(width: 8),
+                      Text('ID: ALC-${rank['id'].toString().padLeft(2, '0')}', style: TextStyle(color: _cyan.withOpacity(0.4), fontSize: 10, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.menu_book, color: Colors.white24, size: 12),
+                      const SizedBox(width: 4),
+                      Text('Ch. ${rank['chapter'] ?? '1'}', style: const TextStyle(color: Colors.white24, fontSize: 11)),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.bolt, color: Colors.white24, size: 12),
+                      const SizedBox(width: 4),
+                      Text('${rank['xp_threshold'] ?? rank['min_xp'] ?? rank['xp_required'] ?? 0} XP', style: const TextStyle(color: Colors.white24, fontSize: 11)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            IconButton(onPressed: () => _handleEdit(rank), icon: const Icon(Icons.edit_outlined, color: Colors.white24, size: 20)),
+            IconButton(onPressed: () => _handleDelete(rank['id'].toString()), icon: const Icon(Icons.delete_outline, color: Colors.white24, size: 20)),
+          ],
+        ),
       ),
     );
   }

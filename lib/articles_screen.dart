@@ -41,44 +41,42 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
   @override
   Widget build(BuildContext context) {
     const primaryCyan = Color(0xFF00FBFF);
-    const darkBg = Color(0xFF050F10);
+    const darkBg = Color(0xFF111718); // Updated to match image somewhat, or use existing 0xFF050F10
     final isAdmin = _apiService.currentUser?.isAdmin ?? false;
 
     return Scaffold(
-      backgroundColor: darkBg,
-      body: BackgroundWrapper(
-        showGrid: true,
-        removeSafeAreaPadding: true,
+      backgroundColor: const Color(0xFF101416),
+      body: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(primaryCyan),
+            if (isAdmin)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                child: _buildAdminAddButton(primaryCyan),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+              child: _buildSearchBar(primaryCyan),
+            ),
             Expanded(
-              child: Stack(
-                children: [
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (isAdmin) ...[
-                          _buildAdminAddButton(primaryCyan),
-                          const SizedBox(height: 20),
-                        ],
-                        _buildSearchBar(primaryCyan),
-                        const SizedBox(height: 24),
-                        _buildCategoryTabs(primaryCyan),
-                        const SizedBox(height: 32),
-                        if (_isLoading)
-                          const Center(child: CircularProgressIndicator(color: primaryCyan))
-                        else if (_articles.isEmpty)
-                          const Center(child: Text('No articles found', style: TextStyle(color: Colors.white38)))
-                        else
-                          ..._articles.map((article) => _buildArticleCard(article, primaryCyan)).toList(),
-                        const SizedBox(height: 100),
-                      ],
-                    ),
-                  ),
-                ],
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildCategoryTabs(primaryCyan),
+                    const SizedBox(height: 24),
+                    if (_isLoading)
+                      const Center(child: CircularProgressIndicator(color: primaryCyan))
+                    else if (_articles.isEmpty)
+                      const Center(child: Text('No articles found', style: TextStyle(color: Colors.white38)))
+                    else
+                      ..._articles.map((article) => _buildArticleCard(article, primaryCyan)).toList(),
+                    const SizedBox(height: 100),
+                  ],
+                ),
               ),
             ),
           ],
@@ -89,20 +87,23 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
 
   Widget _buildHeader(Color primaryCyan) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 40, 16, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
+        color: const Color(0xFF161F21),
         border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Icon(Icons.menu, color: Colors.white),
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF00FBFF)),
+            onPressed: () => Navigator.pop(context),
+          ),
           const Text(
-            'NEON_LIBRARY',
+            'LIBRARY',
             style: TextStyle(
               color: Color(0xFF00FBFF),
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.5,
             ),
@@ -114,7 +115,7 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
               border: Border.all(color: Colors.white24, width: 2),
             ),
             child: CircleAvatar(
-              radius: 16,
+              radius: 14,
               backgroundImage: NetworkImage(_apiService.currentUser?.avatarUrl ?? 'https://i.pravatar.cc/150?u=user'),
             ),
           ),
@@ -133,42 +134,35 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
         if (result == true) _fetchArticles();
       },
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
+          border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
         ),
-        child: const Icon(Icons.add, color: Colors.white, size: 32),
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
     );
   }
 
   Widget _buildSearchBar(Color primaryCyan) {
     return Container(
-      height: 56,
+      height: 50,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A1618),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: primaryCyan.withOpacity(0.3)),
+        color: const Color(0xFF151D1F),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF005658)), // Deep cyan border
       ),
-      child: Row(
-        children: [
-          Icon(Icons.search, color: primaryCyan.withOpacity(0.5)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              onSubmitted: (_) => _fetchArticles(),
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                hintText: 'Scan for research topics...',
-                hintStyle: TextStyle(color: Colors.white24, fontSize: 14),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-        ],
+      child: TextField(
+        controller: _searchController,
+        onSubmitted: (_) => _fetchArticles(),
+        style: const TextStyle(color: Colors.white),
+        decoration: const InputDecoration(
+          hintText: 'Scan for research topics...',
+          hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(vertical: 14),
+        ),
       ),
     );
   }
@@ -210,136 +204,157 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
 
   Widget _buildArticleCard(dynamic article, Color primaryCyan) {
     final isAdmin = _apiService.currentUser?.isAdmin ?? false;
+    final isBookmarked = article['is_bookmarked'] == true;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      height: 400,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        image: DecorationImage(
-          image: NetworkImage(article['thumbnail_url'] ?? 'https://picsum.photos/id/101/600/800'),
-          fit: BoxFit.cover,
-        ),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.black.withOpacity(0.8),
-            ],
-          ),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isAdmin)
+      margin: const EdgeInsets.only(bottom: 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image
+          Stack(
+            children: [
+              Container(
+                height: 220,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  image: DecorationImage(
+                    image: NetworkImage(article['thumbnail_url'] ?? 'https://picsum.photos/id/101/600/800'),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                bottom: 16,
+                child: Icon(Icons.search, color: primaryCyan.withOpacity(0.5), size: 24),
+              ),
+              Positioned(
+                right: 16,
+                top: 16,
+                child: Row(
+                  children: [
+                    if (isAdmin)
+                      GestureDetector(
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => AddArticleScreen(initialData: article)),
+                          );
+                          if (result == true) _fetchArticles();
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                          child: const Icon(Icons.edit, color: Colors.white, size: 20),
+                        ),
+                      ),
                     GestureDetector(
                       onTap: () async {
-                        final result = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AddArticleScreen(initialData: article),
-                          ),
-                        );
-                        if (result == true) _fetchArticles();
+                        final success = await _apiService.toggleBookmark(article['id']);
+                        if (success) _fetchArticles();
                       },
                       child: Container(
-                        margin: const EdgeInsets.only(right: 8),
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
-                          shape: BoxShape.circle,
+                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                        child: Icon(
+                          isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                          color: primaryCyan,
+                          size: 20,
                         ),
-                        child: const Icon(Icons.edit, color: Colors.white, size: 20),
                       ),
                     ),
-                  GestureDetector(
-                    onTap: () async {
-                      final success = await _apiService.toggleBookmark(article['id']);
-                      if (success) _fetchArticles();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        article['is_bookmarked'] == true ? Icons.bookmark : Icons.bookmark_border,
-                        color: primaryCyan,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // Title
+          Text(
+            article['title'] ?? '5 Types of Chemical Reactions',
+            style: const TextStyle(
+              color: Color(0xFFCFFFFF),
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              height: 1.2,
+              shadows: [Shadow(color: Color(0xFF00FBFF), blurRadius: 10)],
             ),
-            const Spacer(),
+          ),
+          const SizedBox(height: 16),
+          // Description
+          if (article['description'] != null && article['description'].toString().isNotEmpty) ...[
             Text(
-              article['title'] ?? '5 Types of Chemical Reactions',
+              article['description'],
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                height: 1.2,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                height: 1.6,
               ),
             ),
             const SizedBox(height: 24),
-            _buildReadButton(primaryCyan, article),
           ],
-        ),
+          // Read Button Image
+          _ImageButton(
+            image1: 'assets/read_article1.png',
+            image2: 'assets/read_article2.png',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ArticleViewScreen(articleId: article['id'])),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          // Separator line
+          Container(
+            height: 2,
+            width: double.infinity,
+            color: Colors.white.withOpacity(0.8),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildReadButton(Color primaryCyan, dynamic article) {
-    return Container(
-      width: double.infinity,
-      height: 60,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [
-            primaryCyan.withOpacity(0.8),
-            const Color(0xFF008080).withOpacity(0.8),
-          ],
-        ),
-      ),
-      child: ElevatedButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => ArticleViewScreen(articleId: article['id'])),
-          );
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Text(
-              'READ ARTICLE',
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1,
-              ),
-            ),
-            SizedBox(width: 8),
-            Icon(Icons.arrow_forward, color: Colors.black, size: 20),
-          ],
+class _ImageButton extends StatefulWidget {
+  final String image1;
+  final String image2;
+  final VoidCallback onTap;
+
+  const _ImageButton({
+    required this.image1,
+    required this.image2,
+    required this.onTap,
+  });
+
+  @override
+  State<_ImageButton> createState() => _ImageButtonState();
+}
+
+class _ImageButtonState extends State<_ImageButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: Container(
+        height: 60, // Fixed height to prevent layout shift
+        alignment: Alignment.bottomCenter,
+        child: Image.asset(
+          _isPressed ? widget.image2 : widget.image1,
+          width: double.infinity,
+          fit: BoxFit.contain,
+          alignment: Alignment.bottomCenter,
         ),
       ),
     );

@@ -3,20 +3,21 @@ import 'package:flutter/material.dart';
 class BackgroundWrapper extends StatelessWidget {
   final Widget child;
   final bool removeSafeAreaPadding;
+  final bool showGrid;
+  final Color? backgroundColor;
 
   const BackgroundWrapper({
     super.key, 
     required this.child,
     this.removeSafeAreaPadding = false,
     this.showGrid = false,
+    this.backgroundColor,
   });
-
-  final bool showGrid;
 
   @override
   Widget build(BuildContext context) {  
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1214), // Dark charcoal background
+      backgroundColor: backgroundColor ?? const Color(0xFF0B1214), // Default Dark charcoal
       body: Stack(
         children: [
           if (showGrid)

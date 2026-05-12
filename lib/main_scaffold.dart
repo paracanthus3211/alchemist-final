@@ -3,11 +3,16 @@ import 'home_screen.dart';
 import 'quiz_screen.dart';
 import 'rank_screen.dart';
 import 'profile_screen.dart';
+import 'services/settings_service.dart';
 import 'more_menu_screen.dart';
 import 'daily_task_management_screen.dart';
 import 'daily_task_form_sheet.dart';
 import 'services/api_service.dart';
 import 'models/user_model.dart';
+import 'articles_screen.dart';
+import 'virtual_lab_screen.dart';
+import 'add_friends_screen.dart';
+import 'bookmark_screen.dart';
 
 class MainScaffold extends StatefulWidget {
   final int initialIndex;
@@ -19,12 +24,26 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   late int _selectedIndex;
+  bool _isMoreMenuVisible = false;
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+    SettingsService().addListener(_rebuild);
   }
+
+  void _rebuild() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    SettingsService().removeListener(_rebuild);
+    super.dispose();
+  }
+
+  String _t(String key) => SettingsService().t(key);
 
   final List<Widget> _pages = const [
     HomeScreen(),
@@ -47,24 +66,70 @@ class _MainScaffoldState extends State<MainScaffold> {
       backgroundColor: navBgColor,
       floatingActionButton: showFab ? _buildAdminFAB(context) : null,
       // Persistent bottom nav bar
-      bottomNavigationBar: Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: navBgColor,
-          border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05), width: 1)),
-        ),
-        child: SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _navItem(icon: Icons.home_rounded, label: 'HOME', index: 0, color: primaryCyan),
-              _navItem(icon: Icons.biotech_rounded, label: 'QUIZ', index: 1, color: primaryCyan),
-              _navItem(icon: Icons.bar_chart_rounded, label: 'RANK', index: 2, color: primaryCyan),
-              _navItem(icon: Icons.person_rounded, label: 'PROFILE', index: 3, color: primaryCyan),
-              _navItem(icon: Icons.more_horiz_rounded, label: 'MORE', index: 4, color: primaryCyan),
-            ],
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Secondary More Menu Bar
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            height: _isMoreMenuVisible ? 70 : 0,
+            decoration: BoxDecoration(
+              color: navBgColor,
+              border: Border(
+                top: BorderSide(color: Colors.white.withValues(alpha: 0.05), width: 1),
+                bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05), width: 1),
+              ),
+            ),
+            child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              child: Container(
+                height: 70,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _moreNavItem(
+                      icon: Icons.library_books_rounded, 
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ArticlesScreen())),
+                    ),
+                    _moreNavItem(
+                      icon: Icons.science_rounded, 
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VirtualLabScreen())),
+                    ),
+                    _moreNavItem(
+                      icon: Icons.group_rounded, 
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddFriendsScreen())),
+                    ),
+                    _moreNavItem(
+                      icon: Icons.bookmark_rounded, 
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BookmarkScreen())),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
+          // Main Bottom Nav Bar
+          Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: navBgColor,
+              border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05), width: 1)),
+            ),
+            child: SafeArea(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _navItem(icon: Icons.home_rounded, label: _t('home'), index: 0, color: primaryCyan),
+                  _navItem(icon: Icons.biotech_rounded, label: _t('quiz'), index: 1, color: primaryCyan),
+                  _navItem(icon: Icons.bar_chart_rounded, label: _t('rank'), index: 2, color: primaryCyan),
+                  _navItem(icon: Icons.person_rounded, label: _t('profile'), index: 3, color: primaryCyan),
+                  _navItem(icon: Icons.more_horiz_rounded, label: _t('more'), index: 4, color: primaryCyan),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
       // IndexedStack keeps all pages alive
       body: IndexedStack(
@@ -80,13 +145,14 @@ class _MainScaffoldState extends State<MainScaffold> {
       behavior: HitTestBehavior.opaque,
       onTap: () {
         if (index == 4) {
-          showDialog(
-            context: context,
-            barrierColor: Colors.black.withValues(alpha: 0.6),
-            builder: (context) => const MoreMenuPopup(),
-          );
+          setState(() {
+            _isMoreMenuVisible = !_isMoreMenuVisible;
+          });
         } else {
-          setState(() => _selectedIndex = index);
+          setState(() {
+            _selectedIndex = index;
+            _isMoreMenuVisible = false;
+          });
         }
       },
       child: Container(
@@ -135,6 +201,20 @@ class _MainScaffoldState extends State<MainScaffold> {
     );
   }
 
+  Widget _moreNavItem({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 65,
+        child: Icon(
+          icon,
+          color: Colors.white.withValues(alpha: 0.8),
+          size: 28,
+        ),
+      ),
+    );
+  }
+
   Widget _buildAdminFAB(BuildContext context) {
     const cyan = Color(0xFF00FBFF);
     const card = Color(0xFF111718);
@@ -155,8 +235,8 @@ class _MainScaffoldState extends State<MainScaffold> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: cyan.withValues(alpha: 0.25)),
             ),
-            child: const Text(
-              'Manage Tasks',
+            child: Text(
+              _t('manage_tasks'),
               style: TextStyle(
                   color: cyan, fontSize: 11, fontWeight: FontWeight.w700),
             ),

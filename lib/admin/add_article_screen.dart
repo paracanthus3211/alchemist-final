@@ -16,6 +16,7 @@ class AddArticleScreen extends StatefulWidget {
 class _AddArticleScreenState extends State<AddArticleScreen> {
   final ApiService _apiService = ApiService();
   final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _categoryController = TextEditingController();
   String _selectedLevel = 'Dasar';
 
@@ -34,19 +35,41 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
     super.initState();
     if (widget.initialData != null) {
       _titleController.text = widget.initialData!['title'] ?? '';
+      _descriptionController.text = widget.initialData!['description'] ?? '';
       _categoryController.text = widget.initialData!['category'] ?? '';
       _selectedLevel = widget.initialData!['difficulty_level'] ?? 'Dasar';
       _thumbnailUrl = widget.initialData!['thumbnail_url'];
       final rawContents = List<Map<String, dynamic>>.from(widget.initialData!['contents'] ?? []);
       _contents = rawContents.map((block) {
+        String textValue = '';
+        double fontSize = 16.0;
+        String fontWeight = 'normal';
+
+        if (block['type'] == 'text') {
+          try {
+            final decoded = block['content'] is String ? jsonDecode(block['content']) : block['content'];
+            if (decoded is Map) {
+              textValue = decoded['text'] ?? '';
+              fontSize = (decoded['fontSize'] ?? 16.0).toDouble();
+              fontWeight = decoded['fontWeight'] ?? 'normal';
+            } else {
+              textValue = block['content'] ?? '';
+            }
+          } catch (e) {
+            textValue = block['content'] ?? '';
+          }
+        } else {
+          textValue = block['type'] == 'table'
+              ? (block['content'] is String ? block['content'] : jsonEncode(block['content']))
+              : (block['content'] ?? '');
+        }
+
         return {
           ...block,
           '_id': _nextBlockId++,
-          '_controller': TextEditingController(
-            text: block['type'] == 'table'
-                ? (block['content'] is String ? block['content'] : jsonEncode(block['content']))
-                : (block['content'] ?? ''),
-          ),
+          'fontSize': fontSize,
+          'fontWeight': fontWeight,
+          '_controller': TextEditingController(text: textValue),
         };
       }).toList();
     }
@@ -63,6 +86,7 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
   void dispose() {
     _titleController.removeListener(_onFieldChanged);
     _titleController.dispose();
+    _descriptionController.dispose();
     _categoryController.dispose();
     for (final block in _contents) {
       (block['_controller'] as TextEditingController?)?.dispose();
@@ -119,6 +143,8 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
         'content': type == 'table'
             ? {'headers': ['Header 1', 'Header 2'], 'rows': [['Data 1', 'Data 2']]}
             : '',
+        'fontSize': 16.0,
+        'fontWeight': 'normal',
         '_id': _nextBlockId++,
         '_controller': controller,
       });
@@ -126,16 +152,45 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
   }
 
   Map<String, dynamic> _cleanBlockForSave(Map<String, dynamic> block) {
+    dynamic content = block['content'];
+    if (block['type'] == 'text') {
+      content = {
+        'text': (block['_controller'] as TextEditingController).text,
+        'fontSize': block['fontSize'] ?? 16.0,
+        'fontWeight': block['fontWeight'] ?? 'normal',
+      };
+    }
     return {
       'type': block['type'],
-      'content': block['content'],
+      'content': content,
     };
   }
 
   Future<void> _saveArticle() async {
+    // Validation
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an article title'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+    if (_categoryController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a category'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+    if (_thumbnailUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please pick a thumbnail image'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
     final data = {
       'title': _titleController.text,
+      'description': _descriptionController.text,
       'category': _categoryController.text,
       'difficulty_level': _selectedLevel,
       'thumbnail_url': _thumbnailUrl,
@@ -185,6 +240,9 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
                   children: [
                     _buildLabel('Title'),
                     _buildTextField(_titleController, 'Enter Title'),
+                    const SizedBox(height: 20),
+                    _buildLabel('Description'),
+                    _buildTextField(_descriptionController, 'Enter Description (Excerpt)', maxLines: 3),
                     const SizedBox(height: 20),
                     _buildLabel('Category'),
                     _buildTextField(_categoryController, 'Enter Category (e.g. Acid Reactions)'),
@@ -318,7 +376,7 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint) {
+  Widget _buildTextField(TextEditingController controller, String hint, {int maxLines = 1}) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF151D1F),
@@ -328,6 +386,7 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
       child: TextField(
         controller: controller,
         style: const TextStyle(color: Colors.white),
+        maxLines: maxLines,
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: Colors.white24, fontSize: 14),
@@ -379,6 +438,23 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
       ),
       child: Column(
         children: [
+          const SizedBox(height: 12),
+          const Text(
+            'Add content blocks to build your article structure:',
+            style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildAddIconBtn('Text', Icons.text_fields, () => _addBlock('text')),
+              _buildAddIconBtn('Gambar', Icons.image, () => _addBlock('image')),
+              _buildAddIconBtn('Table', Icons.table_chart, () => _addBlock('table')),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Divider(color: Colors.white10),
+          const SizedBox(height: 12),
           ReorderableListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -405,20 +481,22 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
               return _buildBlockItem(index, block, primaryCyan);
             },
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildAddIconBtn('Text', Icons.text_fields, () => _addBlock('text')),
-              _buildAddIconBtn('Gambar', Icons.image, () => _addBlock('image')),
-              _buildAddIconBtn('Table', Icons.table_chart, () => _addBlock('table')),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Drag and drop the content to manage the structure position',
-            style: TextStyle(color: Colors.white24, fontSize: 10),
-          ),
+          if (_contents.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildAddIconBtn('Text', Icons.text_fields, () => _addBlock('text')),
+                _buildAddIconBtn('Gambar', Icons.image, () => _addBlock('image')),
+                _buildAddIconBtn('Table', Icons.table_chart, () => _addBlock('table')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Drag and drop the content to manage the structure position',
+              style: TextStyle(color: Colors.white24, fontSize: 10),
+            ),
+          ],
         ],
       ),
     );
@@ -500,21 +578,73 @@ class _AddArticleScreenState extends State<AddArticleScreen> {
 
   Widget _buildBlockInput(Map<String, dynamic> block, TextEditingController controller) {
     if (block['type'] == 'text') {
-      return TextField(
-        controller: controller,
-        onChanged: (v) {
-          block['content'] = v;
-          setState(() {});
-        },
-        style: const TextStyle(color: Colors.white70, fontSize: 13),
-        maxLines: 5,
-        minLines: 1,
-        decoration: const InputDecoration(
-          hintText: 'Enter content text',
-          hintStyle: TextStyle(color: Colors.white10),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: 8),
-        ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('Size: ', style: TextStyle(color: Colors.white54, fontSize: 10)),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  ),
+                  child: Slider(
+                    value: block['fontSize'] ?? 16.0,
+                    min: 12,
+                    max: 32,
+                    divisions: 10,
+                    activeColor: const Color(0xFF00FBFF),
+                    inactiveColor: Colors.white10,
+                    onChanged: (v) => setState(() => block['fontSize'] = v),
+                  ),
+                ),
+              ),
+              Text('${(block['fontSize'] ?? 16.0).toInt()}px', style: const TextStyle(color: Colors.white, fontSize: 10)),
+              const SizedBox(width: 16),
+              GestureDetector(
+                onTap: () => setState(() => block['fontWeight'] = block['fontWeight'] == 'bold' ? 'normal' : 'bold'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: block['fontWeight'] == 'bold' ? const Color(0xFF00FBFF) : Colors.white10,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'BOLD',
+                    style: TextStyle(
+                      color: block['fontWeight'] == 'bold' ? Colors.black : Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            onChanged: (v) {
+              setState(() {});
+            },
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: block['fontSize'] ?? 16.0,
+              fontWeight: block['fontWeight'] == 'bold' ? FontWeight.bold : FontWeight.normal,
+            ),
+            maxLines: null,
+            minLines: 1,
+            decoration: const InputDecoration(
+              hintText: 'Enter content text',
+              hintStyle: TextStyle(color: Colors.white10),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 8),
+            ),
+          ),
+        ],
       );
     } else if (block['type'] == 'image') {
       return _buildImagePicker(

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
@@ -6,7 +7,7 @@ import '../models/daily_task_model.dart';
 import 'base_url_stub.dart'
     if (dart.library.io) 'base_url_io.dart';
 
-class ApiService {
+class ApiService extends ChangeNotifier {
   static String get baseUrl => getApiBaseUrl();
 
   // Singleton pattern
@@ -18,6 +19,29 @@ class ApiService {
   String? _token;
 
   AppUser? get currentUser => _currentUser;
+
+  static int toInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  Future<AppUser?> getCurrentUser() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user'),
+        headers: {'Accept': 'application/json', 'Authorization': 'Bearer $_token'},
+      );
+      if (response.statusCode == 200) {
+        _currentUser = AppUser.fromJson(jsonDecode(response.body));
+        notifyListeners();
+        return _currentUser;
+      }
+      return _currentUser;
+    } catch (e) { return _currentUser; }
+  }
   String? get token => _token;
 
   Future<Map<String, dynamic>> login(String email, String password) async {
@@ -76,7 +100,7 @@ class ApiService {
         final data = jsonDecode(response.body);
         final int newTotalXp = data['total_xp'] ?? (_currentUser?.totalXp ?? 0);
         
-        // Update local user object
+        // Update local user object with full progress data
         if (_currentUser != null) {
           _currentUser = AppUser(
             id: _currentUser!.id,
@@ -84,10 +108,20 @@ class ApiService {
             email: _currentUser!.email,
             role: _currentUser!.role,
             totalXp: newTotalXp,
-            currentStreak: _currentUser!.currentStreak,
+            streakCount: _currentUser!.streakCount,
+            maxStreak: _currentUser!.maxStreak,
             avatarUrl: _currentUser!.avatarUrl,
+            equippedAvatarId: _currentUser!.equippedAvatarId,
+            createdAt: _currentUser!.createdAt,
+            selectedRankId: _currentUser!.selectedRankId,
+            quizLevel: data['quiz_level'] ?? _currentUser!.quizLevel,
+            currentLevelName: data['current_level_name'] ?? _currentUser!.currentLevelName,
+            currentChapterTitle: data['current_chapter_title'] ?? _currentUser!.currentChapterTitle,
+            currentLevelProgress: data['current_level_progress'] ?? _currentUser!.currentLevelProgress,
+            profileBgColor: _currentUser!.profileBgColor,
           );
         }
+        notifyListeners();
         return true;
       }
       return false;
@@ -193,10 +227,151 @@ class ApiService {
         email: _currentUser!.email,
         role: _currentUser!.role,
         totalXp: newTotal,
-        currentStreak: _currentUser!.currentStreak,
+        streakCount: _currentUser!.streakCount,
+        maxStreak: _currentUser!.maxStreak,
         avatarUrl: _currentUser!.avatarUrl,
+        equippedAvatarId: _currentUser!.equippedAvatarId,
         createdAt: _currentUser!.createdAt,
+        selectedRankId: _currentUser!.selectedRankId,
+        quizLevel: _currentUser!.quizLevel,
+        currentLevelName: _currentUser!.currentLevelName,
+        currentChapterTitle: _currentUser!.currentChapterTitle,
+        currentLevelProgress: _currentUser!.currentLevelProgress,
+        profileBgColor: _currentUser!.profileBgColor,
       );
+      notifyListeners();
+    }
+  }
+
+  // --- AVATAR METHODS ---
+
+  Future<List<dynamic>> getAvatars() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/avatars'), headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $_token',
+      });
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body)['data'];
+      }
+      return [];
+    } catch (e) {
+      print('Get Avatars Error: $e');
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getMyAvatars() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/user/avatars'), headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $_token',
+      });
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body)['data'];
+      }
+      return [];
+    } catch (e) {
+      print('Get My Avatars Error: $e');
+      return [];
+    }
+  }
+
+  Future<bool> equipAvatar(int avatarId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/user/avatars/$avatarId/equip'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      );
+      if (response.statusCode == 200) {
+        // Refresh full user data to get the new avatarUrl from server
+        await getCurrentUser();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Equip Avatar Error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateProfileBgColor(String? color) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/user/profile-bg'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+        body: json.encode({'color': color}),
+      );
+
+      if (response.statusCode == 200) {
+        // Refresh full user data to get the new background color from server
+        await getCurrentUser();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Update Profile Bg Error: $e');
+      return false;
+    }
+  }
+
+  // Admin Avatar CRUD
+  Future<bool> createAvatar(Map<String, dynamic> data) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/avatars'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+        body: jsonEncode(data),
+      );
+      return response.statusCode == 201;
+    } catch (e) {
+      print('Create Avatar Error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateAvatar(int id, Map<String, dynamic> data) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/avatars/$id'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+        body: jsonEncode(data),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Update Avatar Error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteAvatar(int id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/avatars/$id'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Delete Avatar Error: $e');
+      return false;
     }
   }
 
@@ -313,6 +488,32 @@ class ApiService {
     }
   }
 
+  Future<bool> saveLevelCompletion(int levelId, int score, int timeSeconds, int wrongCount) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/levels/$levelId/complete'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+        body: json.encode({
+          'score': score,
+          'completion_time_seconds': timeSeconds,
+          'wrong_answers_count': wrongCount,
+        }),
+      );
+      if (response.statusCode == 200) {
+        await getCurrentUser();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Save Level Completion Error: $e');
+      return false;
+    }
+  }
+
   Future<bool> createQuestion(Map<String, dynamic> data) async {
     try {
       final response = await http.post(
@@ -369,10 +570,11 @@ class ApiService {
   // DAILY TASKS
   // ──────────────────────────────────────────────
 
-  Future<List<DailyTaskModel>> getDailyTasks() async {
+  Future<List<DailyTaskModel>> getDailyTasks({String? mode}) async {
     try {
+      final url = mode != null ? '$baseUrl/daily-tasks?mode=$mode' : '$baseUrl/daily-tasks';
       final response = await http.get(
-        Uri.parse('$baseUrl/daily-tasks'),
+        Uri.parse(url),
         headers: {
           'Accept': 'application/json',
           if (_token != null) 'Authorization': 'Bearer $_token',
@@ -389,6 +591,25 @@ class ApiService {
       print('Get Daily Tasks Error: $e');
       return [];
     }
+  }
+
+  Future<List<DailyTaskModel>> regenerateDailyTasks() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/daily-tasks/regenerate'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return (data['data'] as List)
+            .map((t) => DailyTaskModel.fromJson(t))
+            .toList();
+      }
+      return [];
+    } catch (e) { return []; }
   }
 
   Future<Map<String, int>> getDailyTaskStats() async {
@@ -727,6 +948,47 @@ class ApiService {
     }
   }
 
+  Future<bool> selectRank(int? rankId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/user/select-rank'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+        body: json.encode({'rank_id': rankId}),
+      );
+
+      if (response.statusCode == 200) {
+        if (_currentUser != null) {
+          _currentUser = AppUser(
+            id: _currentUser!.id,
+            username: _currentUser!.username,
+            email: _currentUser!.email,
+            role: _currentUser!.role,
+            totalXp: _currentUser!.totalXp,
+            streakCount: _currentUser!.streakCount,
+            maxStreak: _currentUser!.maxStreak,
+            avatarUrl: _currentUser!.avatarUrl,
+            equippedAvatarId: _currentUser!.equippedAvatarId,
+            createdAt: _currentUser!.createdAt,
+            selectedRankId: rankId,
+            quizLevel: _currentUser!.quizLevel,
+            currentLevelName: _currentUser!.currentLevelName,
+            currentChapterTitle: _currentUser!.currentChapterTitle,
+            currentLevelProgress: _currentUser!.currentLevelProgress,
+          );
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Select Rank Error: $e');
+      return false;
+    }
+  }
+
   // ──────────────────────────────────────────────
   // FRIENDS
   // ──────────────────────────────────────────────
@@ -811,5 +1073,113 @@ class ApiService {
       );
       return response.statusCode == 200;
     } catch (e) { return false; }
+  }
+
+  Future<List<dynamic>> getReadingHistory() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user/reading-history'),
+        headers: {'Accept': 'application/json', 'Authorization': 'Bearer $_token'},
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['data'] ?? [];
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<bool> finishArticle(int articleId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/articles/$articleId/finish'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['user'] != null && _currentUser != null) {
+          final userData = data['user'];
+          _currentUser = AppUser(
+            id: _currentUser!.id,
+            username: _currentUser!.username,
+            email: _currentUser!.email,
+            role: _currentUser!.role,
+            totalXp: userData['xp'] ?? _currentUser!.totalXp,
+            streakCount: _currentUser!.streakCount,
+            maxStreak: _currentUser!.maxStreak,
+            avatarUrl: _currentUser!.avatarUrl,
+            equippedAvatarId: _currentUser!.equippedAvatarId,
+            createdAt: _currentUser!.createdAt,
+            selectedRankId: _currentUser!.selectedRankId,
+            quizLevel: userData['quiz_level'] ?? _currentUser!.quizLevel,
+            currentLevelName: userData['current_level_name'] ?? _currentUser!.currentLevelName,
+            currentChapterTitle: userData['current_chapter_title'] ?? _currentUser!.currentChapterTitle,
+            currentLevelProgress: userData['current_level_progress'] ?? _currentUser!.currentLevelProgress,
+          );
+          notifyListeners();
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Finish Article Error: $e');
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getUserProfile(int userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/$userId/profile'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body)['data'];
+      }
+      return null;
+    } catch (e) {
+      print('Get User Profile Error: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> getFriendStats() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/friends/stats'),
+        headers: {'Accept': 'application/json', 'Authorization': 'Bearer $_token'},
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['data'] ?? {'following': 0, 'followers': 0, 'friends': 0};
+      }
+      return {'following': 0, 'followers': 0, 'friends': 0};
+    } catch (e) {
+      return {'following': 0, 'followers': 0, 'friends': 0};
+    }
+  }
+
+  Future<bool> toggleFollow(int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/$userId/follow'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Toggle Follow Error: $e');
+      return false;
+    }
   }
 }

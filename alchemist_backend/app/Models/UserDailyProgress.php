@@ -11,6 +11,7 @@ class UserDailyProgress extends Model
         'task_id',
         'date',
         'current_progress',
+        'completed_stages',
         'is_completed',
     ];
 
@@ -18,6 +19,7 @@ class UserDailyProgress extends Model
         'is_completed' => 'boolean',
         'date' => 'date',
         'current_progress' => 'integer',
+        'completed_stages' => 'array',
     ];
 
     public function task()

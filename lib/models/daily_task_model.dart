@@ -8,6 +8,8 @@ class DailyTaskModel {
   final bool isActive;
   final int currentProgress;
   final bool isCompleted;
+  final List<dynamic>? stages;
+  final List<int>? completedStages;
 
   DailyTaskModel({
     required this.id,
@@ -19,19 +21,30 @@ class DailyTaskModel {
     required this.isActive,
     this.currentProgress = 0,
     this.isCompleted = false,
+    this.stages,
+    this.completedStages,
   });
 
   factory DailyTaskModel.fromJson(Map<String, dynamic> json) {
+    // Handle completed_stages which might be a Map instead of List from PHP
+    List<int> parseCompletedStages(dynamic val) {
+      if (val is List) return List<int>.from(val.map((e) => int.tryParse(e.toString()) ?? 0));
+      if (val is Map) return val.values.map((e) => int.tryParse(e.toString()) ?? 0).toList().cast<int>();
+      return [];
+    }
+
     return DailyTaskModel(
-      id: json['id'],
+      id: json['id'] ?? 0,
       taskName: json['task_name'] ?? '',
       taskType: json['task_type'] ?? '',
       description: json['description'],
-      targetValue: json['target_value'] ?? 1,
-      xpReward: json['xp_reward'] ?? 0,
-      isActive: json['is_active'] == true || json['is_active'] == 1,
-      currentProgress: json['current_progress'] ?? 0,
-      isCompleted: json['is_completed'] == true || json['is_completed'] == 1,
+      targetValue: int.tryParse(json['target_value']?.toString() ?? '1') ?? 1,
+      xpReward: int.tryParse(json['xp_reward']?.toString() ?? '0') ?? 0,
+      isActive: json['is_active'] == true || json['is_active'] == 1 || json['is_active'] == '1',
+      currentProgress: int.tryParse(json['current_progress']?.toString() ?? '0') ?? 0,
+      isCompleted: json['is_completed'] == true || json['is_completed'] == 1 || json['is_completed'] == '1',
+      stages: json['stages'] is List ? json['stages'] : null,
+      completedStages: parseCompletedStages(json['completed_stages']),
     );
   }
 
@@ -57,6 +70,8 @@ class DailyTaskModel {
         return 'Lab Experiment';
       case 'DAILY_LOGIN':
         return 'Daily Login';
+      case 'SCORE':
+        return 'Quiz Score (total skor kuis)';
       default:
         return taskType;
     }
@@ -72,6 +87,8 @@ class DailyTaskModel {
     bool? isActive,
     int? currentProgress,
     bool? isCompleted,
+    List<dynamic>? stages,
+    List<int>? completedStages,
   }) {
     return DailyTaskModel(
       id: id ?? this.id,
@@ -83,6 +100,8 @@ class DailyTaskModel {
       isActive: isActive ?? this.isActive,
       currentProgress: currentProgress ?? this.currentProgress,
       isCompleted: isCompleted ?? this.isCompleted,
+      stages: stages ?? this.stages,
+      completedStages: completedStages ?? this.completedStages,
     );
   }
 }

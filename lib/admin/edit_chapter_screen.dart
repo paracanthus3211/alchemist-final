@@ -20,10 +20,23 @@ class _EditChapterScreenState extends State<EditChapterScreen> {
   final _titleController = TextEditingController();
   final _xpThresholdController = TextEditingController();
   
+  String _selectedColorHex = '#00FBFF';
+  final List<String> _chapterColors = [
+    '#00FBFF', // Cyan
+    '#CCFF00', // Lime
+    '#FF0055', // Red
+    '#FF6B6B', // Pink/Coral
+    '#9D00FF', // Purple
+    '#FFAA00', // Orange
+    '#00FF88', // Green
+    '#0088FF', // Blue
+  ];
+  
   // Level fields
   final _levelNameController = TextEditingController();
   final _levelDescController = TextEditingController();
   final _levelXpController = TextEditingController();
+  final _levelTimerController = TextEditingController();
   String? _imageUrl;
   Uint8List? _imageBytes;
   bool _isUploadingImage = false;
@@ -37,10 +50,23 @@ class _EditChapterScreenState extends State<EditChapterScreen> {
       _titleController.text = widget.initialData!['title'] ?? '';
       _xpThresholdController.text = (widget.initialData!['xp_threshold'] ?? 0).toString();
       
+      if (widget.parentChapterId == null) {
+        String existingEmoji = widget.initialData!['icon_emoji'] ?? '';
+        if (existingEmoji.startsWith('#')) {
+          _selectedColorHex = existingEmoji;
+          if (!_chapterColors.contains(existingEmoji)) {
+            _chapterColors.add(existingEmoji);
+          }
+        }
+      }
+      
       // If it's a level being edited (logic for later)
       _levelNameController.text = widget.initialData!['name'] ?? '';
       _levelDescController.text = widget.initialData!['description'] ?? '';
       _levelXpController.text = (widget.initialData!['xp_required'] ?? 0).toString();
+      _levelTimerController.text = widget.initialData!['timer_limit'] != null 
+          ? (widget.initialData!['timer_limit'] ~/ 60).toString() 
+          : '';
       _imageUrl = widget.initialData!['icon_url'];
     }
   }
@@ -61,6 +87,7 @@ class _EditChapterScreenState extends State<EditChapterScreen> {
         'xp_required': int.tryParse(_levelXpController.text) ?? 0,
         'order_index': widget.initialData?['order_index'] ?? widget.nextOrder,
         'icon_url': _imageUrl ?? 'https://example.com/icon.png',
+        'timer_limit': (int.tryParse(_levelTimerController.text) ?? 0) * 60,
       };
       
       if (widget.initialData != null && widget.initialData!['id'] != null) {
@@ -74,7 +101,7 @@ class _EditChapterScreenState extends State<EditChapterScreen> {
         'title': _titleController.text,
         'xp_threshold': int.tryParse(_xpThresholdController.text) ?? 0,
         'order_index': widget.initialData?['order_index'] ?? widget.nextOrder,
-        'icon_emoji': '🧪',
+        'icon_emoji': _selectedColorHex,
       };
 
       if (widget.initialData != null) {
@@ -121,6 +148,8 @@ class _EditChapterScreenState extends State<EditChapterScreen> {
                         _buildTextField('TITLE CHAPTER', _titleController, 'Input Title Chapter'),
                         const SizedBox(height: 20),
                         _buildTextField('XP THRESHOLD / XP REQUIREMENT', _xpThresholdController, 'Input XP Requirement', isNumber: true),
+                        const SizedBox(height: 20),
+                        _buildColorSelector(),
                       ],
                       
                       if (widget.parentChapterId != null) ...[
@@ -133,6 +162,8 @@ class _EditChapterScreenState extends State<EditChapterScreen> {
                         _buildUploadButton('UPLOAD IMAGE LEVEL'),
                         const SizedBox(height: 20),
                         _buildTextField('XP REQUIRED / XP THRESHOLD', _levelXpController, 'Input XP Requirement', isNumber: true),
+                        const SizedBox(height: 20),
+                        _buildTextField('TIMER LIMIT (MINUTES) - Optional', _levelTimerController, 'Input Minutes (e.g. 4)', isNumber: true, isRequired: false),
                       ],
                       
                       const SizedBox(height: 60),
@@ -183,7 +214,7 @@ class _EditChapterScreenState extends State<EditChapterScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, String hint, {bool isNumber = false, int maxLines = 1}) {
+  Widget _buildTextField(String label, TextEditingController controller, String hint, {bool isNumber = false, int maxLines = 1, bool isRequired = true}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -212,7 +243,52 @@ class _EditChapterScreenState extends State<EditChapterScreen> {
               borderSide: const BorderSide(color: Color(0xFF00FBFF), width: 1),
             ),
           ),
-          validator: (value) => value == null || value.isEmpty ? 'Cannot be empty' : null,
+          validator: (value) {
+            if (isRequired && (value == null || value.isEmpty)) return 'Cannot be empty';
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildColorSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'COLOR',
+          style: TextStyle(color: Color(0xFF00FBFF), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.0),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A1618),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.05)),
+          ),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: _chapterColors.map((hex) {
+              Color c = Color(int.parse(hex.replaceFirst('#', 'FF'), radix: 16));
+              bool isSelected = _selectedColorHex == hex;
+              return GestureDetector(
+                onTap: () => setState(() => _selectedColorHex = hex),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: c,
+                    borderRadius: BorderRadius.circular(8),
+                    border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
+                    boxShadow: isSelected ? [BoxShadow(color: c.withOpacity(0.5), blurRadius: 8)] : null,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ),
       ],
     );

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'article_view_screen.dart';
 import 'models/daily_task_model.dart';
 import 'models/user_model.dart';
 import 'services/api_service.dart';
+import 'services/settings_service.dart';
 import 'widgets/background_wrapper.dart';
-
+import 'widgets/animated_progress_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,13 +22,74 @@ class _HomeScreenState extends State<HomeScreen> {
   final _api = ApiService();
 
   List<DailyTaskModel> _tasks = [];
+  List<dynamic> _ranks = [];
+  dynamic _currentRank;
+  dynamic _displayRank;
+  dynamic _nextRank;
+  List<dynamic> _history = [];
   bool _loadingTasks = true;
+  bool _loadingRanks = true;
+  bool _loadingHistory = true;
   AppUser? get _user => _api.currentUser;
 
   @override
   void initState() {
     super.initState();
     _loadTasks();
+    _loadRanks();
+    _loadHistory();
+    ApiService().addListener(_onUserUpdated);
+    SettingsService().addListener(_onSettingsChanged);
+  }
+
+  void _onSettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onUserUpdated() {
+    if (mounted) {
+      _loadTasks();
+      _loadRanks();
+      _loadHistory(); // Refresh daftar bacaan secara otomatis
+    }
+  }
+
+  @override
+  void dispose() {
+    ApiService().removeListener(_onUserUpdated);
+    SettingsService().removeListener(_onSettingsChanged);
+    super.dispose();
+  }
+
+  String _t(String key) => SettingsService().t(key);
+
+  Future<void> _loadRanks() async {
+    setState(() => _loadingRanks = true);
+    final ranks = await _api.getRanks();
+    if (mounted) {
+      setState(() {
+        _ranks = ranks;
+        final xp = _user?.totalXp ?? 0;
+        _currentRank = _ranks.lastWhere((r) => (r['xp_threshold'] ?? 0) <= xp, orElse: () => null);
+        _displayRank = _currentRank;
+        
+        // If user has a selected rank, use that for the display icon
+        if (_user?.selectedRankId != null) {
+          final selected = _ranks.firstWhere((r) => r['id'].toString() == _user?.selectedRankId.toString(), orElse: () => null);
+          if (selected != null) {
+             _displayRank = selected;
+          }
+        }
+        
+        final idx = _currentRank != null ? _ranks.indexOf(_currentRank) : -1;
+        if (idx != -1 && idx < _ranks.length - 1) {
+          _nextRank = _ranks[idx + 1];
+        } else if (idx == -1 && _ranks.isNotEmpty) {
+          _nextRank = _ranks.first;
+        }
+        _loadingRanks = false;
+      });
+    }
   }
 
   Future<void> _loadTasks() async {
@@ -38,6 +101,38 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _loadHistory() async {
+    setState(() => _loadingHistory = true);
+    final history = await _api.getReadingHistory();
+    if (mounted) {
+      setState(() {
+        _history = history;
+        _loadingHistory = false;
+      });
+    }
+  }
+
+  Color? _parseColor(String? hexColor) {
+    if (hexColor == null || hexColor.isEmpty) return null;
+    hexColor = hexColor.replaceAll("#", "");
+    if (hexColor.length == 6) {
+      hexColor = "FF$hexColor";
+    }
+    if (hexColor.length == 8) {
+      return Color(int.parse("0x$hexColor"));
+    }
+    return null;
+  }
+
+  Future<void> _onRefresh() async {
+    await Future.wait([
+      _api.getCurrentUser(),
+      _loadTasks(),
+      _loadRanks(),
+      _loadHistory(),
+    ]);
+  }
+
   int get _completedCount => _tasks.where((t) => t.isCompleted).length;
 
   @override
@@ -46,27 +141,36 @@ class _HomeScreenState extends State<HomeScreen> {
       showGrid: true,
       removeSafeAreaPadding: true,
       child: RefreshIndicator(
-        onRefresh: _loadTasks,
+        onRefresh: _onRefresh,
         color: _cyan,
         backgroundColor: _card,
-        child: SingleChildScrollView(
+        child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics()),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 32),
-              _buildStreakCard(),
-              const SizedBox(height: 32),
-              _buildLevelProgress(),
-              const SizedBox(height: 40),
-              _buildContinueReading(),
-              const SizedBox(height: 40),
-              _buildDailyTasks(),
-              const SizedBox(height: 100),
-            ],
-          ),
+          slivers: [
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _HomeStickyHeaderDelegate(
+                child: _buildHeader(),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 12), // Reduced since header has padding
+                  _buildStreakCard(),
+                  const SizedBox(height: 32),
+                  _buildLevelProgress(),
+                  const SizedBox(height: 40),
+                  _buildContinueReading(),
+                  const SizedBox(height: 40),
+                  _buildDailyTasks(),
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -77,14 +181,12 @@ class _HomeScreenState extends State<HomeScreen> {
   // ─────────────────────────────────────────────
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
-              const Icon(Icons.science_outlined, color: _cyan, size: 28),
-              const SizedBox(width: 8),
               Text(
                 (_user?.username.toUpperCase() ?? 'ALCHEMIST'),
                 style: const TextStyle(
@@ -96,17 +198,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: _cyan.withValues(alpha: 0.5), width: 1.5),
-              image: const DecorationImage(
-                image: NetworkImage('https://i.pravatar.cc/150?u=alchemist'),
-                fit: BoxFit.cover,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _parseColor(_user?.profileBgColor) ?? Colors.transparent,
+                  image: DecorationImage(
+                    image: NetworkImage(_user?.avatarUrl ?? 'https://i.pravatar.cc/150?u=${_user?.username ?? 'alchemist'}'),
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
-            ),
+              if (_displayRank != null && _displayRank!['icon_url'] != null)
+                Positioned(
+                  bottom: -2, right: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(color: Color(0xFF0D1213), shape: BoxShape.circle),
+                    child: CircleAvatar(
+                      radius: 8,
+                      backgroundColor: _cyan,
+                      backgroundImage: _displayRank!['icon_url'].startsWith('http') 
+                        ? NetworkImage(_displayRank!['icon_url']) 
+                        : null,
+                      child: _displayRank!['icon_url'].startsWith('http') 
+                        ? null 
+                        : const Icon(Icons.shield, size: 10, color: Colors.black),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -117,7 +242,16 @@ class _HomeScreenState extends State<HomeScreen> {
   // STREAK CARD
   // ─────────────────────────────────────────────
   Widget _buildStreakCard() {
-    final streak = _user?.currentStreak ?? 7;
+    final streak = _user?.streakCount ?? 0;
+    final lastStudy = _user?.lastStudyAt;
+    final today = DateTime.now();
+    
+    // Check if studied today
+    final studiedToday = lastStudy != null && 
+        lastStudy.year == today.year && 
+        lastStudy.month == today.month && 
+        lastStudy.day == today.day;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Container(
@@ -130,8 +264,8 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'STREAK LEARNING',
+            Text(
+              _t('streak'),
               style: TextStyle(
                 color: _cyan,
                 fontSize: 12,
@@ -141,53 +275,71 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.local_fire_department, color: _lime, size: 40),
-                const SizedBox(width: 8),
-                Text(
-                  '$streak',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 48,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
-                  ),
-                ),
-                const Spacer(),
+                // Bagian Kiri: Icon + Angka
                 Row(
-                  children: List.generate(5, (i) {
-                    final isActive = i == 0;
-                    return Container(
-                      margin: const EdgeInsets.only(left: 4),
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: isActive
-                            ? _lime
-                            : Colors.white.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: isActive
-                            ? [
-                                BoxShadow(
-                                  color: _lime.withValues(alpha: 0.3),
-                                  blurRadius: 8,
-                                )
-                              ]
-                            : null,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset('assets/streak.png', width: 36, height: 36, color: streak > 0 ? null : Colors.white12, colorBlendMode: streak > 0 ? null : BlendMode.modulate),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$streak',
+                      style: TextStyle(
+                        color: streak > 0 ? Colors.white : Colors.white24,
+                        fontSize: 42,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
                       ),
-                      child: Center(
-                        child: Text(
-                          i == 0 ? 'S\n$streak' : '·',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: isActive ? Colors.black : Colors.white24,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
+                    ),
+                  ],
+                ),
+                
+                // Bagian Kanan: Hari (Pake FittedBox biar auto-kecil kalo gak muat)
+                Flexible(
+                  child: FittedBox(
+                    child: Row(
+                      children: List.generate(7, (i) {
+                        final date = today.subtract(Duration(days: 6 - i));
+                        final dayNames = ['Mg','Sn','Sl','Rb','Km','Jm','Sb'];
+                        final dayLabel = dayNames[date.weekday % 7];
+                        final isToday = i == 6;
+                        final isActive = isToday && studiedToday;
+
+                        return Container(
+                          margin: const EdgeInsets.only(left: 4),
+                          width: 24, 
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: isActive ? _lime : Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                        ),
-                      ),
-                    );
-                  }),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                dayLabel,
+                                style: TextStyle(
+                                  color: isActive ? Colors.black : Colors.white38,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isToday ? '$streak' : '·',
+                                style: TextStyle(
+                                  color: isActive ? Colors.black : Colors.white24,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -201,20 +353,18 @@ class _HomeScreenState extends State<HomeScreen> {
   // LEVEL PROGRESS
   // ─────────────────────────────────────────────
   Widget _buildLevelProgress() {
-    final xp = _user?.totalXp ?? 250;
-    final nextXp = 500;
-    final pct = (xp / nextXp).clamp(0.0, 1.0);
-
+    final xp = _user?.totalXp ?? 0;
+    final minXp = (_currentRank?['xp_threshold'] ?? 0) as int;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'CURRENT LEVEL',
-            style: TextStyle(
+          Text(
+            _t('current_level').toUpperCase(),
+            style: const TextStyle(
               color: _cyan,
-              fontSize: 12,
+              fontSize: 10,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.2,
             ),
@@ -224,61 +374,47 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text(
-                'Master Alchemist',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
+              Expanded(
+                child: Text(
+                  'Level ${_user?.quizLevel ?? 0} - ${_user?.currentLevelName ?? 'Novice'}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              RichText(
-                text: TextSpan(children: [
-                  TextSpan(
-                    text: '${(pct * 100).toStringAsFixed(0)}',
-                    style: const TextStyle(
-                        color: _lime, fontSize: 24, fontWeight: FontWeight.w900),
-                  ),
-                  const TextSpan(
-                    text: ' %',
-                    style: TextStyle(color: _lime, fontSize: 14),
-                  ),
-                ]),
+              Text(
+                '${_user?.currentLevelProgress ?? 0}%',
+                style: const TextStyle(
+                    color: _lime, fontSize: 24, fontWeight: FontWeight.w900),
               ),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            (_user?.currentChapterTitle ?? 'Prologue').toUpperCase(),
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+            ),
+          ),
           const SizedBox(height: 12),
-          Stack(
-            children: [
-              Container(
-                height: 12,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              FractionallySizedBox(
-                widthFactor: pct,
-                child: Container(
-                  height: 12,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [_lime, _cyan]),
-                    borderRadius: BorderRadius.circular(6),
-                    boxShadow: [
-                      BoxShadow(color: _lime.withValues(alpha: 0.3), blurRadius: 10)
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          AnimatedProgressBar(
+            value: ((_user?.currentLevelProgress ?? 0) / 100).clamp(0.0, 1.0),
+            height: 10,
+            backgroundColor: Colors.white.withValues(alpha: 0.1),
+            foregroundGradient: const LinearGradient(colors: [_lime, _cyan]),
+            boxShadow: [BoxShadow(color: _cyan.withValues(alpha: 0.3), blurRadius: 10)],
           ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _smallStat(Icons.hub_outlined, '$xp XP'),
-              _smallStat(Icons.bolt, '${_user?.currentStreak ?? 0} DAY STREAK'),
+              _smallStat('assets/xp.png', '${_user?.currentLevelXp ?? 0} / ${_user?.totalLevelXp ?? 0} XP'),
+              _smallStat('assets/streak.png', '${_user?.streakCount ?? 0} DAY STREAK'),
             ],
           ),
         ],
@@ -286,14 +422,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _smallStat(IconData icon, String text) {
+  Widget _smallStat(String assetPath, String text) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: _lime),
-        const SizedBox(width: 4),
-        Text(text,
-            style: const TextStyle(
-                color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold)),
+        Image.asset(assetPath, width: 24, height: 24),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.5,
+          ),
+        ),
       ],
     );
   }
@@ -310,8 +452,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'CONTINUE READING',
+              Text(
+                _t('continue_reading'),
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -324,78 +466,98 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 20),
         SizedBox(
-          height: 240,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            physics: const BouncingScrollPhysics(),
-            children: [
-              _moduleCard(
-                'MODULE 04',
-                'Covalent Resonances',
-                'Understanding the electron sharing protocols between carbon atoms...',
-                'https://images.unsplash.com/photo-1532187875605-2fe35952016a?auto=format&fit=crop&q=80&w=800',
-                _cyan,
-              ),
-              const SizedBox(width: 20),
-              _moduleCard(
-                'MODULE 05',
-                'Noble States',
-                'Analyzing why Helium and Neon maintain absolute stability...',
-                'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=80&w=800',
-                const Color(0xFF9D50BB),
-              ),
-            ],
-          ),
+          height: 480, // Increased height for the new design
+          child: _loadingHistory 
+            ? const Center(child: CircularProgressIndicator(color: _cyan))
+            : _history.isEmpty 
+              ? Center(child: Text('No reading history', style: TextStyle(color: Colors.white.withValues(alpha: 0.3))))
+              : ListView.builder(
+                  primary: false,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: _history.length,
+                  itemBuilder: (context, index) {
+                    final item = _history[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 20),
+                      child: _moduleCard(item, _cyan),
+                    );
+                  },
+                ),
         ),
       ],
     );
   }
 
-  Widget _moduleCard(
-      String tag, String title, String desc, String imageUrl, Color tagColor) {
-    return Container(
-      width: 280,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        image: DecorationImage(
-          image: NetworkImage(imageUrl),
-          fit: BoxFit.cover,
-          colorFilter:
-              ColorFilter.mode(Colors.black.withValues(alpha: 0.4), BlendMode.darken),
-        ),
-      ),
-      padding: const EdgeInsets.all(20),
+  Widget _moduleCard(dynamic item, Color tagColor) {
+    final article = item['article'] ?? item;
+    final title = article['title'] ?? 'Untitled';
+    final desc = article['description'] ?? '';
+    final imageUrl = article['thumbnail_url'] ?? 'https://picsum.photos/id/101/600/800';
+    final tag = article['category']?.toString().toUpperCase() ?? 'RESEARCH';
+    final articleId = article['id'];
+
+    double cardWidth = MediaQuery.of(context).size.width * 0.8;
+    if (cardWidth > 320) cardWidth = 320;
+    
+    return SizedBox(
+      width: cardWidth,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          // Image Section
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            height: 200,
             decoration: BoxDecoration(
-              color: tagColor.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(16),
+              image: DecorationImage(
+                image: NetworkImage(imageUrl),
+                fit: BoxFit.cover,
+              ),
             ),
-            child: Text(tag,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900)),
+          ),
+          const SizedBox(height: 20),
+          // Title
+          Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFFCFFFFF),
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              height: 1.2,
+              shadows: [Shadow(color: Color(0xFF00FBFF), blurRadius: 10)],
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 12),
-          Text(title,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          Text(desc,
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  fontSize: 12,
-                  height: 1.4),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis),
+          // Description
+          Text(
+            desc,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              height: 1.5,
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 20),
+          // Read Button
+          _ImageButton(
+            image1: 'assets/read_article1.png',
+            image2: 'assets/read_article2.png',
+            onTap: () {
+              if (articleId != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ArticleViewScreen(articleId: articleId)),
+                ).then((_) => _loadHistory());
+              }
+            },
+          ),
         ],
       ),
     );
@@ -413,19 +575,38 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'DAILY TASK',
+              Text(
+                _t('daily_task'),
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.w900),
               ),
-              Text(
-                '$_completedCount / ${_tasks.length} COMPLETED',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800),
+              Row(
+                children: [
+                  Text(
+                    '$_completedCount / ${_tasks.length} COMPLETED',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800),
+                  ),
+                  if (_api.currentUser?.role == UserRole.admin) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () async {
+                        final newTasks = await _api.regenerateDailyTasks();
+                        if (newTasks.isNotEmpty) {
+                          setState(() => _tasks = newTasks);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Tasks reshuffled!')),
+                          );
+                        }
+                      },
+                      child: Icon(Icons.refresh_rounded, color: _cyan, size: 16),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -467,89 +648,147 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _taskTile(DailyTaskModel task) {
-    IconData icon;
-    switch (task.taskType) {
-      case 'GAIN_XP':
-        icon = Icons.bolt;
-        break;
-      case 'READ_ARTICLE':
-        icon = Icons.menu_book_rounded;
-        break;
-      case 'LAB_EXPERIMENT':
-        icon = Icons.science_outlined;
-        break;
-      case 'DAILY_LOGIN':
-        icon = Icons.login_rounded;
-        break;
-      default:
-        icon = Icons.check_circle_outline;
-    }
-
+    final progress = (task.currentProgress / task.targetValue).clamp(0.0, 1.0);
+    
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: task.isCompleted
-              ? _lime.withValues(alpha: 0.2)
-              : Colors.white.withValues(alpha: 0.05),
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center, // Center vertically
         children: [
-          // Check circle
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: task.isCompleted
-                  ? _lime.withValues(alpha: 0.1)
-                  : Colors.white.withValues(alpha: 0.05),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              task.isCompleted ? Icons.check_circle : icon,
-              color: task.isCompleted ? _lime : Colors.white24,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 16),
+          // Left Side: Title + Progress Bar
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   task.taskName.toUpperCase(),
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5),
+                    color: _cyan,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  task.description ?? task.taskTypeLabel,
-                  style: const TextStyle(
-                      color: Colors.white38,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 20),
+                // Progress Bar
+                AnimatedProgressBar(
+                  value: progress,
+                  height: 12,
+                  backgroundColor: Colors.white.withValues(alpha: 0.1),
+                  foregroundGradient: const LinearGradient(colors: [_lime, _cyan]),
+                ),
+                const SizedBox(height: 6),
+                // Progress Label
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${task.currentProgress}/${task.targetValue} UNITS',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.4),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          Text(
-            '+${task.xpReward}xp',
-            style: TextStyle(
-              color: task.isCompleted ? _lime : Colors.white24,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
+          const SizedBox(width: 20),
+          // Right Side: Gift + Reward (Fixed width to prevent squashing)
+          SizedBox(
+            width: 80,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/gift.png',
+                  width: 60,
+                  height: 60,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => 
+                    const Icon(Icons.card_giftcard, color: _lime, size: 40),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '+${task.xpReward}xp',
+                  style: const TextStyle(
+                    color: _lime,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _ImageButton extends StatefulWidget {
+  final String image1;
+  final String image2;
+  final VoidCallback onTap;
+
+  const _ImageButton({
+    required this.image1,
+    required this.image2,
+    required this.onTap,
+  });
+
+  @override
+  State<_ImageButton> createState() => _ImageButtonState();
+}
+
+class _ImageButtonState extends State<_ImageButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: Container(
+        height: 60,
+        alignment: Alignment.bottomCenter,
+        child: Image.asset(
+          _isPressed ? widget.image2 : widget.image1,
+          width: double.infinity,
+          fit: BoxFit.contain,
+          alignment: Alignment.bottomCenter,
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeStickyHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  _HomeStickyHeaderDelegate({required this.child});
+
+  @override
+  double get minExtent => 84.0;
+  @override
+  double get maxExtent => 84.0;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: const Color(0xFF050F10), // Matching the background
+      alignment: Alignment.center,
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_HomeStickyHeaderDelegate oldDelegate) => true;
 }

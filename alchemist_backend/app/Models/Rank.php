@@ -11,6 +11,7 @@ class Rank extends Model
 
     protected $fillable = [
         'name',
+        'chapter',
         'xp_threshold',
         'icon_url',
     ];

@@ -16,6 +16,7 @@ class Level extends Model
         'icon_url',
         'xp_required',
         'order_index',
+        'timer_limit',
     ];
 
     public function chapter()

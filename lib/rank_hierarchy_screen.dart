@@ -23,14 +23,41 @@ class _RankHierarchyScreenState extends State<RankHierarchyScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    _fetchRanks();
   }
 
-  Future<void> _fetchData() async {
+  Future<void> _handleSelect(int rankId) async {
+    // Find the rank to check threshold
+    final rank = _ranks.firstWhere((r) => r['id'] == rankId, orElse: () => null);
+    if (rank != null) {
+      final threshold = (rank['xp_threshold'] ?? rank['min_xp'] ?? 0) as int;
+      if (_userXp < threshold) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('XP tidak cukup! Butuh $threshold XP, kamu punya $_userXp XP.'),
+              backgroundColor: Colors.redAccent,
+            )
+          );
+        }
+        return;
+      }
+    }
+    final success = await ApiService().selectRank(rankId);
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rank badge equipped!'), backgroundColor: Color(0xFF00FBFF))
+      );
+      // Refresh user data (if possible) or just UI
+      setState(() {});
+    }
+  }
+
+  Future<void> _fetchRanks() async {
     setState(() => _isLoading = true);
-    final results = await Future.wait([
+    final results = await Future.wait<dynamic>([
       ApiService().getRanks(),
-      Future.value(ApiService().currentUser),
+      ApiService().getCurrentUser(),
     ]);
     if (mounted) {
       setState(() {
@@ -41,6 +68,18 @@ class _RankHierarchyScreenState extends State<RankHierarchyScreen> {
     }
   }
 
+  Color? _parseColor(String? hexColor) {
+    if (hexColor == null || hexColor.isEmpty) return null;
+    hexColor = hexColor.replaceAll("#", "");
+    if (hexColor.length == 6) {
+      hexColor = "FF$hexColor";
+    }
+    if (hexColor.length == 8) {
+      return Color(int.parse("0x$hexColor"));
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ApiService().currentUser;
@@ -48,72 +87,79 @@ class _RankHierarchyScreenState extends State<RankHierarchyScreen> {
 
     return Scaffold(
       backgroundColor: _bg,
-      body: SafeArea(
+      body: BackgroundWrapper(
+        showGrid: true,
         child: Column(
           children: [
-            // Custom App Bar
+            // Custom Header matching screenshot
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
               child: Row(
                 children: [
+                  const SizedBox(width: 10),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.menu, color: Colors.white, size: 28),
+                    child: Container(
+                      width: 45,
+                      height: 45,
+                      decoration: BoxDecoration(
+                        color: _cyan.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.arrow_back, color: _cyan, size: 24),
+                    ),
                   ),
-                  const SizedBox(width: 16),
-                  const Text('ALCHEMIST RANKS', style: TextStyle(color: _cyan, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                  const Spacer(),
-                  if (user?.avatarUrl != null)
-                    CircleAvatar(radius: 18, backgroundImage: NetworkImage(user!.avatarUrl!))
+                  const Expanded(
+                    child: Center(
+                      child: Text(
+                        'ALCHEMIST RANKS',
+                        style: TextStyle(
+                          color: _cyan,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (isAdmin)
+                    GestureDetector(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RankEditorScreen())),
+                      child: Container(
+                        width: 45,
+                        height: 45,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.white, width: 2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.add, color: Colors.white, size: 28),
+                      ),
+                    )
                   else
-                    const CircleAvatar(radius: 18, child: Icon(Icons.person, size: 20)),
+                    const SizedBox(width: 45),
+                  const SizedBox(width: 10),
                 ],
               ),
             ),
 
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => Navigator.pop(context),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: _cyan.withOpacity(0.1), shape: BoxShape.circle),
-                            child: const Icon(Icons.arrow_back, color: _cyan, size: 20),
-                          ),
-                        ),
-                        const Spacer(),
-                        if (isAdmin)
-                          GestureDetector(
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RankEditorScreen())),
-                            child: const Icon(Icons.add_circle_outline, color: Colors.white, size: 32),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-                    const Text('Full Rank Hierarchy', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 16),
-                    Text(
-                      'The Rank page functions to display user rankings based on the XP they have collected, motivate users to study harder, and provide recognition for their achievements.',
-                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14, height: 1.6),
-                    ),
-                    const SizedBox(height: 48),
+            const SizedBox(height: 40),
 
-                    _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: _cyan))
-                      : Column(
-                          children: _ranks.map((rank) => _rankHierarchyCard(rank)).toList(),
-                        ),
-                    const SizedBox(height: 100),
-                  ],
-                ),
-              ),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: _cyan))
+                  : GridView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 15,
+                        mainAxisSpacing: 40,
+                        childAspectRatio: 0.5,
+                      ),
+                      itemCount: _ranks.length,
+                      itemBuilder: (context, index) {
+                        return _rankGridItem(_ranks[index]);
+                      },
+                    ),
             ),
           ],
         ),
@@ -121,75 +167,86 @@ class _RankHierarchyScreenState extends State<RankHierarchyScreen> {
     );
   }
 
-  Widget _rankHierarchyCard(dynamic rank) {
+  Widget _rankGridItem(dynamic rank) {
     final threshold = (rank['xp_threshold'] ?? rank['min_xp'] ?? 0) as int;
     final isUnlocked = _userXp >= threshold;
-    final color = _getRankColor(rank['name']);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isUnlocked ? color.withOpacity(0.3) : Colors.white.withOpacity(0.05)),
-      ),
-      child: Row(
+    final user = ApiService().currentUser;
+    final isSelected = user?.selectedRankId == rank['id'];
+    
+    return GestureDetector(
+      onTap: () => _handleSelect(rank['id']),
+      child: Column(
         children: [
-          // Large Sigil Icon
-          Container(
-            width: 80, height: 80,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isUnlocked ? color.withOpacity(0.1) : Colors.white.withOpacity(0.03),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(_getRankIcon(rank['name']), color: isUnlocked ? color : Colors.white12, size: 48),
+          // Rank Icon (Hexagon Gold)
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 70,
+                height: 70,
+                child: (rank['icon_url'] != null && rank['icon_url'].startsWith('http'))
+                    ? Image.network(
+                        rank['icon_url'],
+                        fit: BoxFit.contain,
+                        color: isUnlocked ? null : Colors.white.withOpacity(0.1),
+                        colorBlendMode: isUnlocked ? null : BlendMode.modulate,
+                      )
+                    : Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Icon(Icons.hexagon, color: const Color(0xFFC5A059).withOpacity(0.8), size: 70),
+                          Icon(Icons.hexagon_outlined, color: const Color(0xFFFFD700), size: 72),
+                          const Icon(Icons.science_outlined, color: Color(0xFF4A3411), size: 32),
+                        ],
+                      ),
+              ),
+              if (isSelected)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(color: _cyan, shape: BoxShape.circle),
+                    child: const Icon(Icons.check, color: Colors.black, size: 10),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(width: 24),
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(rank['name'], style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                Text(_getRankSubtitle(rank['name']), style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14, fontWeight: FontWeight.w600)),
-              ],
+          const SizedBox(height: 12),
+          // Rank Name
+          Text(
+            rank['name'],
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isUnlocked ? Colors.white : Colors.white24,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          // Chapter Info
+          Text(
+            'CHAPTER ${rank['chapter'] ?? '1'}',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isUnlocked ? Colors.white60 : Colors.white10,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
             ),
           ),
           // Threshold
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('THRESHOLD', style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
-              Text('$threshold XP', style: TextStyle(color: isUnlocked ? Colors.white : Colors.white24, fontSize: 16, fontWeight: FontWeight.w900)),
-            ],
+          Text(
+            'Threshold : ${threshold} XP',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isUnlocked ? Colors.white38 : Colors.white10,
+              fontSize: 9,
+              fontWeight: FontWeight.w400,
+            ),
           ),
         ],
       ),
     );
-  }
-
-  Color _getRankColor(String name) {
-    final n = name.toLowerCase();
-    if (n.contains('grand')) return const Color(0xFFD4AF37);
-    if (n.contains('adept')) return const Color(0xFF00FBFF);
-    return const Color(0xFFCCFF00);
-  }
-
-  IconData _getRankIcon(String name) {
-    final n = name.toLowerCase();
-    if (n.contains('grand')) return Icons.star_rounded;
-    if (n.contains('adept')) return Icons.science_rounded;
-    return Icons.shield_rounded;
-  }
-
-  String _getRankSubtitle(String name) {
-    final n = name.toLowerCase();
-    if (n.contains('novice')) return 'calon alchemist';
-    if (n.contains('apprentice')) return 'pelajar giat';
-    if (n.contains('adept')) return 'ahli transmutasi';
-    if (n.contains('master')) return 'peneliti utama';
-    return 'pencari ilmu';
   }
 }
