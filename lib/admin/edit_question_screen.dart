@@ -70,7 +70,38 @@ class _EditQuestionScreenState extends State<EditQuestionScreen> {
   }
   
   // Chemicals list
-  final List<String> _chemicals = ['HCl (Asam Klorida)', 'NaOH (Asam Klorida)', 'AgNO3', 'NaCl', 'Zn', 'H2SO4', 'CuSO4'];
+  // Chemical names must EXACTLY match what beaker_a_chemical / beaker_b_chemical
+  // returns from the API so DropdownButton values are always found in items list.
+  final List<String> _chemicals = [
+    'HCl', 'NaOH', 'AgNO₃', 'NaCl', 'Zn', 'H₂SO₄', 'CuSO₄'
+  ];
+
+  // Helper: find the closest matching chemical name in _chemicals list.
+  // Falls back to _chemicals[0] if nothing matches.
+  String _resolveChemical(String? raw) {
+    if (raw == null) return _chemicals[0];
+    // Exact match first
+    if (_chemicals.contains(raw)) return raw;
+    // Try case-insensitive + subscript-normalised match
+    final normalised = raw
+        .toLowerCase()
+        .replaceAll('₀','0').replaceAll('₁','1').replaceAll('₂','2')
+        .replaceAll('₃','3').replaceAll('₄','4').replaceAll('₅','5')
+        .replaceAll('₆','6').replaceAll('₇','7').replaceAll('₈','8')
+        .replaceAll('₉','9').replaceAll(RegExp(r'\s+'), '');
+    for (final c in _chemicals) {
+      final cn = c
+          .toLowerCase()
+          .replaceAll('₀','0').replaceAll('₁','1').replaceAll('₂','2')
+          .replaceAll('₃','3').replaceAll('₄','4').replaceAll('₅','5')
+          .replaceAll('₆','6').replaceAll('₇','7').replaceAll('₈','8')
+          .replaceAll('₉','9').replaceAll(RegExp(r'\s+'), '');
+      if (cn == normalised || cn.startsWith(normalised) || normalised.startsWith(cn)) return c;
+    }
+    // Raw value not in list — add it dynamically to avoid crash
+    _chemicals.add(raw);
+    return raw;
+  }
 
   // Controllers
   final _questionCtrl = TextEditingController();
@@ -91,8 +122,8 @@ class _EditQuestionScreenState extends State<EditQuestionScreen> {
   final _verificationCtrl = TextEditingController();
 
   // Lab Practice
-  String _beakerA = "HCl (Asam Klorida)";
-  String _beakerB = "NaOH (Asam Klorida)";
+  String _beakerA = 'HCl';
+  String _beakerB = 'NaOH';
   final _visualResultCtrl = TextEditingController();
   final _equationCtrl = TextEditingController();
 
@@ -412,8 +443,8 @@ class _EditQuestionScreenState extends State<EditQuestionScreen> {
         }
       } else if (q['type'] == 'LAB_PRACTICE' && q['lab_practice_config'] != null) {
         final config = q['lab_practice_config'];
-        _beakerA = config['beaker_a_chemical'] ?? _chemicals[0];
-        _beakerB = config['beaker_b_chemical'] ?? _chemicals[1];
+        _beakerA = _resolveChemical(config['beaker_a_chemical']?.toString());
+        _beakerB = _resolveChemical(config['beaker_b_chemical']?.toString());
         _visualResultCtrl.text = config['expected_visual_result'] ?? '';
         _equationCtrl.text = config['expected_reaction_equation'] ?? '';
         

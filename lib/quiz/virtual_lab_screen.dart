@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class VirtualLabScreen extends StatefulWidget {
   final Map<String, dynamic> questionData;
@@ -6,8 +7,8 @@ class VirtualLabScreen extends StatefulWidget {
   final Function(bool isCorrectMix) onMixChanged;
 
   const VirtualLabScreen({
-    super.key, 
-    required this.questionData, 
+    super.key,
+    required this.questionData,
     required this.onOptionSelected,
     required this.onMixChanged,
   });
@@ -23,46 +24,67 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
   int? _selectedOptionIndex;
   String _activeBeaker = 'A';
 
+  // ── Normalization & Comparison Logic ──
+
+  String _normalize(String str) {
+    return str
+        .toLowerCase()
+        .replaceAll('₀', '0')
+        .replaceAll('₁', '1')
+        .replaceAll('₂', '2')
+        .replaceAll('₃', '3')
+        .replaceAll('₄', '4')
+        .replaceAll('₅', '5')
+        .replaceAll('₆', '6')
+        .replaceAll('₇', '7')
+        .replaceAll('₈', '8')
+        .replaceAll('₉', '9')
+        .replaceAll(RegExp(r'\s+'), '')
+        .trim();
+  }
+
   bool _compareChemical(String? currentId, String? expectedFullString) {
     if (currentId == null || expectedFullString == null) return false;
-    
-    final current = currentId.toLowerCase();
-    final expected = expectedFullString.toLowerCase();
-    
-    // Check for exact match
+    final current = _normalize(currentId);
+    final expected = _normalize(expectedFullString);
     if (current == expected) return true;
-    
-    // Check if the expected string contains the current ID as a distinct chemical symbol/name
-    // (Handles "HCl (Asam Klorida)" matching "hcl")
-    if (expected.contains(current)) {
-      // Basic check: Ensure it's not just a partial match of a longer word
-      // e.g., 'h' matching 'hcl'. We know our IDs are things like 'hcl', 'naoh', etc.
-      return true; 
-    }
-    
+    if (expected.contains(current) || current.contains(expected)) return true;
     return false;
   }
 
   bool _isCorrectMix() {
     final config = widget.questionData['lab_practice_config'];
     if (config == null) return false;
-    
     final expectedA = config['beaker_a_chemical']?.toString();
     final expectedB = config['beaker_b_chemical']?.toString();
-    
     return (_compareChemical(_selectedA, expectedA) && _compareChemical(_selectedB, expectedB)) ||
            (_compareChemical(_selectedA, expectedB) && _compareChemical(_selectedB, expectedA));
   }
 
+  // ── Chemical Reagents Database (with type labels) ──
+
   final Map<String, dynamic> _chemicals = {
-    'hcl': {'name': 'HCl', 'fullName': 'Asam Klorida', 'color': Color(0xFFFF6B6B)},
-    'naoh': {'name': 'NaOH', 'fullName': 'Natrium Hidroksida', 'color': Color(0xFF4DABF7)},
-    'agno3': {'name': 'AgNO₃', 'fullName': 'Perak Nitrat', 'color': Color(0xFFE9ECEF)},
-    'nacl': {'name': 'NaCl', 'fullName': 'Natrium Klorida', 'color': Color(0xFFADB5BD)},
-    'zn': {'name': 'Zn', 'fullName': 'Seng', 'color': Color(0xFFCED4DA)},
-    'h2so4': {'name': 'H₂SO₄', 'fullName': 'Asam Sulfat', 'color': Color(0xFFFF922B)},
-    'cuso4': {'name': 'CuSO₄', 'fullName': 'Tembaga Sulfat', 'color': Color(0xFF69DB7E)},
+    'hcl': {'name': 'HCl', 'fullName': 'Asam Klorida', 'type': 'Acid', 'color': const Color(0xFF9B6B6B), 'shadow': const Color(0xFF6D4A4A)},
+    'naoh': {'name': 'NaOH', 'fullName': 'Natrium Hidroksida', 'type': 'Basa', 'color': const Color(0xFF1E88E5), 'shadow': const Color(0xFF1565C0)},
+    'agno3': {'name': 'AgNO₃', 'fullName': 'Perak Nitrat', 'type': 'Salt', 'color': const Color(0xFF9E9E9E), 'shadow': const Color(0xFF757575)},
+    'nacl': {'name': 'NaCl', 'fullName': 'Natrium Klorida', 'type': 'Salt', 'color': const Color(0xFF8A8A8A), 'shadow': const Color(0xFF636363)},
+    'zn': {'name': 'Zn', 'fullName': 'Seng', 'type': 'Metal', 'color': const Color(0xFF9E9E9E), 'shadow': const Color(0xFF757575)},
+    'h2so4': {'name': 'H₂SO₄', 'fullName': 'Asam Sulfat', 'type': 'Acid', 'color': const Color(0xFFF59E0B), 'shadow': const Color(0xFFB97008)},
+    'cuso4': {'name': 'CuSO₄', 'fullName': 'Tembaga Sulfat', 'type': 'Salt', 'color': const Color(0xFF2E7D32), 'shadow': const Color(0xFF1B5E20)},
   };
+
+  // ── Liquid colors for beaker display ──
+  final Map<String, Color> _liquidColors = {
+    'hcl': const Color(0xFFEF5350),
+    'naoh': const Color(0xFF42A5F5),
+    'agno3': const Color(0xFFB0BEC5),
+    'nacl': const Color(0xFF78909C),
+    'zn': const Color(0xFF90A4AE),
+    'h2so4': const Color(0xFFFF7043),
+    'cuso4': const Color(0xFF66BB6A),
+  };
+
+  // ── Build ──
 
   @override
   Widget build(BuildContext context) {
@@ -72,27 +94,13 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildQuestionHeader(),
-          const SizedBox(height: 24),
           _buildLabWorkbench(),
           const SizedBox(height: 24),
           _buildInventory(),
           const SizedBox(height: 24),
           _buildActionButtons(),
-          const SizedBox(height: 24),
           if (_isMixed) ...[
-            _buildReactionResult(),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'PILIH JAWABAN YANG TEPAT:',
-                  style: TextStyle(color: Color(0xFF00FBFF), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             _buildOptionsList(),
           ],
           const SizedBox(height: 100),
@@ -101,142 +109,127 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
     );
   }
 
-  Widget _buildQuestionHeader() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF151D1F),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFFCCFF00).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: const Text('LAB TASK', style: TextStyle(color: Color(0xFFCCFF00), fontSize: 10, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            widget.questionData['question_text'] ?? 'Lakukan eksperimen...',
-            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, height: 1.4),
-          ),
-        ],
-      ),
-    );
-  }
+  // ── Lab Workbench with Colorful Beakers ──
 
   Widget _buildLabWorkbench() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          const Text('VIRTUAL LABORATORY', style: TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2)),
-          const SizedBox(height: 24),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildBeaker('BEAKER A', _selectedA, _activeBeaker == 'A', () => setState(() => _activeBeaker = 'A')),
-                const SizedBox(width: 12),
-                const Icon(Icons.add, color: Color(0xFF00FBFF), size: 20),
-                const SizedBox(width: 12),
-                _buildBeaker('BEAKER B', _selectedB, _activeBeaker == 'B', () => setState(() => _activeBeaker = 'B')),
-                const SizedBox(width: 12),
-                const Icon(Icons.arrow_forward, color: Color(0xFFCCFF00), size: 20),
-                const SizedBox(width: 12),
-                _buildBeaker('BEAKER C', _isMixed ? 'result' : null, false, () {}, isResult: true),
-              ],
+          // Beaker A
+          _buildBeaker('BEAKER A', _selectedA, _activeBeaker == 'A',
+            () => setState(() => _activeBeaker = 'A')),
+          const SizedBox(width: 16),
+          // Plus operator
+          Padding(
+            padding: const EdgeInsets.only(bottom: 30),
+            child: Text('+',
+              style: GoogleFonts.spaceGrotesk(
+                color: const Color(0xFF00FBFF), fontSize: 28, fontWeight: FontWeight.w700,
+              ),
             ),
           ),
+          const SizedBox(width: 16),
+          // Beaker B
+          _buildBeaker('BEAKER B', _selectedB, _activeBeaker == 'B',
+            () => setState(() => _activeBeaker = 'B')),
+          const SizedBox(width: 16),
+          // Equals operator
+          Padding(
+            padding: const EdgeInsets.only(bottom: 30),
+            child: Text('=',
+              style: GoogleFonts.spaceGrotesk(
+                color: const Color(0xFF00FBFF), fontSize: 28, fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Beaker C (Result)
+          _buildBeaker('BEAKER C', _isMixed ? 'result' : null, false,
+            () {}, isResult: true),
         ],
       ),
     );
   }
 
+  // ── Individual Beaker (CustomPainter U-shape Design) ──
+
   Widget _buildBeaker(String label, String? chemId, bool isActive, VoidCallback onTap, {bool isResult = false}) {
-    final chem = chemId != null 
-        ? (chemId == 'result' ? {'color': const Color(0xFFCCFF00), 'name': 'HASIL'} : _chemicals[chemId]) 
-        : null;
+    Color? liquidColor;
+    String chemName = '';
+
+    if (chemId == 'result') {
+      liquidColor = const Color(0xFF00BCD4);
+      chemName = 'RESULT';
+    } else if (chemId != null && _liquidColors.containsKey(chemId)) {
+      liquidColor = _liquidColors[chemId]!;
+      chemName = (_chemicals[chemId]?['name'] as String? ?? '').toUpperCase()
+          .replaceAll('₂', '2').replaceAll('₃', '3').replaceAll('₄', '4');
+    }
+
+    // Build label text
+    String labelText = chemName.isNotEmpty ? '$label ($chemName)' : label;
+
+    // Border color
+    Color borderColor;
+    if (isActive) {
+      borderColor = const Color(0xFF00FBFF);
+    } else if (isResult && liquidColor != null) {
+      borderColor = const Color(0xFF00BCD4).withOpacity(0.6);
+    } else {
+      borderColor = Colors.white.withOpacity(0.35);
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Column(
         children: [
-          Container(
-            width: isResult ? 70 : 80,
-            height: isResult ? 90 : 100,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(16), bottomRight: Radius.circular(16)),
-              border: Border.all(color: isActive ? const Color(0xFF00FBFF) : (isResult ? const Color(0xFFCCFF00).withOpacity(0.3) : Colors.white10), width: 2),
-            ),
-            child: Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                // Liquid
-                if (chem != null)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 600),
-                    width: double.infinity,
-                    height: isResult ? 65 : 70,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [chem['color'].withOpacity(0.8), chem['color'].withOpacity(0.4)],
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                      ),
-                      borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(14), bottomRight: Radius.circular(14)),
-                      boxShadow: [BoxShadow(color: chem['color'].withOpacity(0.4), blurRadius: 15, spreadRadius: 2)],
-                    ),
-                    child: isResult ? const Center(child: Icon(Icons.bolt, color: Colors.white70, size: 20)) : null,
-                  ),
-                // Beaker Gloss
-                Positioned(
-                  left: 10, top: 10, bottom: 10,
-                  child: Container(
-                    width: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-              ],
+          // Beaker using CustomPainter
+          SizedBox(
+            width: 90,
+            height: 115,
+            child: CustomPaint(
+              painter: _BeakerPainter(
+                liquidColor: liquidColor,
+                fillLevel: liquidColor != null ? 0.6 : 0.0,
+                borderColor: borderColor,
+                borderWidth: 3.0,
+              ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          // Label text
           Text(
-            chem != null ? '${chem['name']} (${chem['fullName']})' : 'KOSONG',
+            labelText,
             textAlign: TextAlign.center,
-            style: TextStyle(color: chem != null ? const Color(0xFFCCFF00) : Colors.white24, fontSize: 11, fontWeight: FontWeight.bold),
+            style: GoogleFonts.spaceGrotesk(
+              color: liquidColor != null ? Colors.white54 : Colors.white24,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+            ),
           ),
-          Text(label, style: const TextStyle(color: Colors.white10, fontSize: 8, fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
+
+  // ── Chemical Reagents (Colorful Chips with Type Labels) ──
 
   Widget _buildInventory() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('CHEMICAL REAGENTS', style: TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-        const SizedBox(height: 16),
         Wrap(
           spacing: 10,
           runSpacing: 10,
           children: _chemicals.entries.map((e) {
             bool isSelected = _selectedA == e.key || _selectedB == e.key;
+            Color chipColor = e.value['color'] as Color;
+            Color shadowColor = e.value['shadow'] as Color;
+
             return GestureDetector(
               onTap: () {
                 setState(() {
@@ -246,16 +239,47 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
                   widget.onMixChanged(false);
                 });
               },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 78,
+                height: 54,
                 decoration: BoxDecoration(
-                  color: isSelected ? e.value['color'].withOpacity(0.2) : const Color(0xFF151D1F),
+                  color: shadowColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isSelected ? e.value['color'] : Colors.white.withOpacity(0.05)),
                 ),
-                child: Text(
-                  e.value['name'],
-                  style: TextStyle(color: isSelected ? e.value['color'] : Colors.white70, fontWeight: FontWeight.bold, fontSize: 14),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  height: 50,
+                  transform: Matrix4.translationValues(0, isSelected ? 0 : -4, 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: chipColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        (e.value['name'] as String).toUpperCase()
+                            .replaceAll('₂', '2').replaceAll('₃', '3').replaceAll('₄', '4'),
+                        style: GoogleFonts.spaceGrotesk(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        e.value['type'] as String,
+                        style: GoogleFonts.spaceGrotesk(
+                          color: Colors.white60,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -265,126 +289,96 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
     );
   }
 
+  // ── Action Buttons (MIX & REACT + RESET) ──
+
   Widget _buildActionButtons() {
+    bool canMix = _selectedA != null && _selectedB != null;
+
     return Row(
       children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: (_selectedA != null && _selectedB != null) ? () {
-              setState(() => _isMixed = true);
-              widget.onMixChanged(_isCorrectMix());
-            } : null,
-            icon: const Icon(Icons.science),
-            label: const Text('MIX & REACT'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00FBFF),
-              foregroundColor: Colors.black,
-              disabledBackgroundColor: Colors.white.withOpacity(0.05),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 16),
+        // MIX & REACT button (3D style)
+        GestureDetector(
+          onTap: canMix ? () {
+            setState(() => _isMixed = true);
+            widget.onMixChanged(_isCorrectMix());
+          } : null,
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            decoration: BoxDecoration(
+              color: canMix ? const Color(0xFF006064) : Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Container(
+              height: 44,
+              transform: Matrix4.translationValues(0, -4, 0),
+              decoration: BoxDecoration(
+                color: canMix ? const Color(0xFF00BCD4) : Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.science, color: canMix ? Colors.white : Colors.white30, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'MIX & REACT',
+                    style: GoogleFonts.spaceGrotesk(
+                      color: canMix ? Colors.white : Colors.white30,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
         const SizedBox(width: 12),
-        IconButton(
-          onPressed: () => setState(() { 
-            _selectedA = null; 
-            _selectedB = null; 
-            _isMixed = false; 
-            _selectedOptionIndex = null; 
+        // RESET button (3D style, red)
+        GestureDetector(
+          onTap: () => setState(() {
+            _selectedA = null;
+            _selectedB = null;
+            _isMixed = false;
+            _selectedOptionIndex = null;
+            _activeBeaker = 'A';
             widget.onMixChanged(false);
           }),
-          icon: const Icon(Icons.refresh, color: Colors.redAccent),
-          style: IconButton.styleFrom(
-            backgroundColor: Colors.redAccent.withOpacity(0.1),
-            padding: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF7A1C1C),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Container(
+              height: 44,
+              transform: Matrix4.translationValues(0, -4, 0),
+              decoration: BoxDecoration(
+                color: const Color(0xFFC62828),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                'RESET',
+                style: GoogleFonts.spaceGrotesk(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildReactionResult() {
-    final result = _getReactionResult();
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF151D1F),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFCCFF00).withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFFCCFF00).withOpacity(0.05), blurRadius: 20, spreadRadius: -5),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.science, color: const Color(0xFFCCFF00), size: 16),
-              const SizedBox(width: 8),
-              const Text('PERSAMAAN REAKSI (REACTION EQUATION)', style: TextStyle(color: Color(0xFFCCFF00), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(result['equation']!, style: const TextStyle(color: Color(0xFF00FBFF), fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(12)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('HASIL VISUAL (VISUAL RESULT):', style: TextStyle(color: Colors.white24, fontSize: 8, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(result['visual']!, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500, fontStyle: FontStyle.italic)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Map<String, String> _getReactionResult() {
-    final config = widget.questionData['lab_practice_config'];
-    if (config == null) return {'visual': '...', 'equation': '...'};
-    
-    final expectedA = config['beaker_a_chemical']?.toString();
-    final expectedB = config['beaker_b_chemical']?.toString();
-
-    // If it matches the expected reagents of the question
-    if ((_compareChemical(_selectedA, expectedA) && _compareChemical(_selectedB, expectedB)) ||
-        (_compareChemical(_selectedA, expectedB) && _compareChemical(_selectedB, expectedA))) {
-      return {
-        'visual': config['expected_visual_result'] ?? 'Larutan bereaksi',
-        'equation': config['expected_reaction_equation'] ?? 'Reaction occurs',
-      };
-    }
-
-    // Default combinations from HTML example
-    final mix = [_selectedA ?? '', _selectedB ?? '']..sort();
-    final combo = mix.join('+');
-
-    final db = {
-      'hcl+naoh': {'visual': '💧 Larutan menjadi bening + sedikit hangat', 'equation': 'HCl + NaOH → NaCl + H₂O'},
-      'agno3+nacl': {'visual': '☁️ Terbentuk ENDAPAN PUTIH (AgCl)', 'equation': 'AgNO₃ + NaCl → AgCl↓ + NaNO₃'},
-      'hcl+zn': {'visual': '💨 Terbentuk GELEMBUNG GAS HIDROGEN (H₂)', 'equation': 'Zn + 2HCl → ZnCl₂ + H₂↑'},
-      'cuso4+zn': {'visual': '🔴 Terbentuk ENDAPAN MERAH TEMBAGA (Cu)', 'equation': 'Zn + CuSO₄ → ZnSO₄ + Cu↓'},
-      'h2so4+naoh': {'visual': '💧 Larutan menjadi bening + melepaskan panas', 'equation': 'H₂SO₄ + 2NaOH → Na₂SO₄ + 2H₂O'},
-      'agno3+hcl': {'visual': '☁️ Terbentuk ENDAPAN PUTIH (AgCl)', 'equation': 'HCl + AgNO₃ → AgCl↓ + HNO₃'},
-      'h2so4+zn': {'visual': '💨 Terbentuk GELEMBUNG GAS HIDROGEN (H₂)', 'equation': 'Zn + H₂SO₄ → ZnSO₄ + H₂↑'},
-    };
-
-    if (db.containsKey(combo)) return db[combo]!;
-
-    return {
-      'visual': 'Tidak terjadi reaksi yang signifikan',
-      'equation': '${_selectedA?.toUpperCase()} + ${_selectedB?.toUpperCase()} → No Reaction',
-    };
-  }
+  // ── Multiple Choice Options (Duolingo 3D Buttons) ──
 
   Widget _buildOptionsList() {
     final options = widget.questionData['multiple_choice_options'] as List? ?? [];
@@ -392,6 +386,12 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
       children: List.generate(options.length, (index) {
         final opt = options[index];
         bool isSelected = _selectedOptionIndex == index;
+
+        // Duolingo-style colors
+        Color baseColor = isSelected ? const Color(0xFFCCFF00) : const Color(0xFF00838F);
+        Color shadowColor = isSelected ? const Color(0xFF8AAF00) : const Color(0xFF004D40);
+        Color textColor = isSelected ? Colors.black : Colors.white;
+
         return GestureDetector(
           onTap: () {
             setState(() => _selectedOptionIndex = index);
@@ -399,39 +399,152 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
           },
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
+            height: 56,
+            width: double.infinity,
             decoration: BoxDecoration(
-              color: const Color(0xFF151D1F),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isSelected ? const Color(0xFFCCFF00) : Colors.transparent),
+              color: shadowColor,
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFCCFF00) : Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 52,
+              transform: Matrix4.translationValues(0, -4, 0),
+              decoration: BoxDecoration(
+                color: baseColor,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  // Letter label with divider
+                  Container(
+                    width: 52,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border(
+                        right: BorderSide(
+                          color: Colors.black.withOpacity(0.15),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      opt['option_label'] ?? String.fromCharCode(65 + index),
+                      style: GoogleFonts.spaceGrotesk(
+                        color: textColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 20,
+                      ),
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    opt['option_label'] ?? String.fromCharCode(65 + index),
-                    style: TextStyle(color: isSelected ? Colors.black : const Color(0xFF00FBFF), fontWeight: FontWeight.w900),
+                  // Option text
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        (opt['option_text'] ?? '').toString().toUpperCase(),
+                        style: GoogleFonts.spaceGrotesk(
+                          color: textColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    opt['option_text'] ?? '',
-                    style: TextStyle(color: isSelected ? const Color(0xFFCCFF00) : Colors.white70, fontSize: 14),
-                  ),
-                ),
-                if (isSelected) const Icon(Icons.check_circle, color: Color(0xFFCCFF00), size: 24),
-              ],
+                ],
+              ),
             ),
           ),
         );
       }),
     );
+  }
+}
+
+class _BeakerPainter extends CustomPainter {
+  final Color? liquidColor;
+  final double fillLevel; // 0.0 to 1.0 (1.0 is full)
+  final Color borderColor;
+  final double borderWidth;
+
+  _BeakerPainter({
+    this.liquidColor,
+    this.fillLevel = 0.0,
+    required this.borderColor,
+    this.borderWidth = 3.0,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double radius = 20.0; // Curve radius for the bottom corners
+
+    // 1. Draw Liquid Fill (if present)
+    if (liquidColor != null && fillLevel > 0) {
+      final fillHeight = size.height * fillLevel;
+      final fillRect = Rect.fromLTRB(
+        borderWidth / 2, // Start slightly inside the border
+        size.height - fillHeight,
+        size.width - (borderWidth / 2),
+        size.height,
+      );
+
+      // Create a path for the fill to respect the bottom border curves
+      final fillPath = Path()
+        ..moveTo(fillRect.left, fillRect.top)
+        ..lineTo(fillRect.right, fillRect.top)
+        ..lineTo(fillRect.right, fillRect.bottom - radius)
+        ..arcToPoint(
+          Offset(fillRect.right - radius, fillRect.bottom - (borderWidth / 2)),
+          radius: Radius.circular(radius),
+          clockwise: true,
+        )
+        ..lineTo(fillRect.left + radius, fillRect.bottom - (borderWidth / 2))
+        ..arcToPoint(
+          Offset(fillRect.left, fillRect.bottom - radius),
+          radius: Radius.circular(radius),
+          clockwise: true,
+        )
+        ..close();
+
+      final fillPaint = Paint()
+        ..color = liquidColor!
+        ..style = PaintingStyle.fill;
+
+      canvas.drawPath(fillPath, fillPaint);
+    }
+
+    // 2. Draw Beaker Border (U-Shape)
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..strokeWidth = borderWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.square; // Flat top edges
+
+    final borderPath = Path()
+      ..moveTo(0, 0) // Top left
+      ..lineTo(0, size.height - radius) // Down left side
+      ..arcToPoint(
+        Offset(radius, size.height), // Bottom left curve
+        radius: Radius.circular(radius),
+        clockwise: false,
+      )
+      ..lineTo(size.width - radius, size.height) // Bottom flat
+      ..arcToPoint(
+        Offset(size.width, size.height - radius), // Bottom right curve
+        radius: Radius.circular(radius),
+        clockwise: false,
+      )
+      ..lineTo(size.width, 0); // Up right side
+
+    canvas.drawPath(borderPath, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BeakerPainter oldDelegate) {
+    return oldDelegate.liquidColor != liquidColor ||
+           oldDelegate.fillLevel != fillLevel ||
+           oldDelegate.borderColor != borderColor ||
+           oldDelegate.borderWidth != borderWidth;
   }
 }

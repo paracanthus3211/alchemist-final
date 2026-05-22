@@ -106,6 +106,20 @@ class _QuizScreenState extends State<QuizScreen> {
     return activeLevel['name'] ?? 'Apprentice';
   }
 
+  String _getDisplayedLevelDisplayName() {
+    final dispChapter = _getDisplayedChapter();
+    if (dispChapter == null) return '';
+    
+    final levels = (dispChapter['levels'] as List?) ?? [];
+    final activeLevel = levels.firstWhere(
+      (l) => ApiService.toInt(l['progress']) < 100,
+      orElse: () => levels.isNotEmpty ? levels.last : null,
+    );
+    
+    if (activeLevel == null) return 'Expert';
+    return activeLevel['name'] ?? '';
+  }
+
   int _getCurrentLevelNumber() {
     final activeChapter = _getActiveChapter();
     if (activeChapter == null) return 0;
@@ -235,7 +249,7 @@ class _QuizScreenState extends State<QuizScreen> {
                 SliverPersistentHeader(
                   pinned: true,
                   delegate: _StickyHeaderDelegate(
-                    height: 180,
+                    height: 235,
                     child: Column(
                       children: [
                         // --- PROFILE ROW ---
@@ -288,69 +302,60 @@ class _QuizScreenState extends State<QuizScreen> {
                           ),
                         ),
                         
-                        // --- CHAPTER DATA DISPLAY (REVERTED TO ORIGINAL) ---
+                        // --- CHAPTER DATA DISPLAY (DYNAMIC TINTED STYLING) ---
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 6),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0F1B1D),
-                              borderRadius: BorderRadius.circular(16),
+                              color: Color.lerp(chapterColor, Colors.black, 0.82) ?? const Color(0xFF0F1B1D),
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(20),
+                                topRight: Radius.circular(20),
+                                bottomLeft: Radius.circular(8),
+                                bottomRight: Radius.circular(8),
+                              ),
                               border: Border.all(color: Colors.white.withOpacity(0.03)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Color.lerp(chapterColor, Colors.black, 0.90) ?? const Color(0xFF071011),
+                                  offset: const Offset(0, 6),
+                                  blurRadius: 0,
+                                  spreadRadius: 0,
+                                ),
+                              ],
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                Text(
+                                  'Chapter ${_getDisplayedChapter()?['order_index'] ?? 1} - ${displayedChapter?['title'] ?? ''}',
+                                  style: GoogleFonts.spaceGrotesk(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'CHAPTER ${_getDisplayedChapter()?['order_index'] ?? 1}',
-                                          style: GoogleFonts.spaceGrotesk(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w400,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          (_getDisplayedChapter()?['title'] ?? 'ALCHEMIST').toUpperCase(),
-                                          style: GoogleFonts.spaceGrotesk(
-                                            color: Colors.white.withOpacity(0.4),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                            letterSpacing: 1.0,
-                                          ),
-                                        ),
-                                      ],
+                                    Text(
+                                      _getDisplayedLevelDisplayName(),
+                                      style: GoogleFonts.spaceGrotesk(
+                                        color: Colors.white.withOpacity(0.7),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                                      textBaseline: TextBaseline.alphabetic,
-                                      children: [
-                                        Text(
-                                          '${_getDisplayedChapter()?['chapter_progress'] ?? 0}',
-                                          style: GoogleFonts.spaceGrotesk(
-                                            color: chapterColor,
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '%',
-                                          style: GoogleFonts.spaceGrotesk(
-                                            color: Colors.white.withOpacity(0.4),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
+                                    Text(
+                                      '${_getDisplayedChapter()?['chapter_progress'] ?? 0} %',
+                                      style: GoogleFonts.spaceGrotesk(
+                                        color: chapterColor,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -358,22 +363,22 @@ class _QuizScreenState extends State<QuizScreen> {
                                 // Progress Bar
                                 AnimatedProgressBar(
                                   value: ((_getDisplayedChapter()?['chapter_progress'] ?? 0) / 100).clamp(0.0, 1.0),
-                                  height: 8,
-                                  backgroundColor: Colors.white.withOpacity(0.05),
-                                  foregroundGradient: LinearGradient(colors: [chapterColor.withOpacity(0.5), chapterColor]),
-                                  boxShadow: [BoxShadow(color: chapterColor.withOpacity(0.1), blurRadius: 4)],
+                                  height: 7,
+                                  backgroundColor: Colors.white.withOpacity(0.2),
+                                  foregroundGradient: LinearGradient(colors: [chapterColor, chapterColor]),
+                                  boxShadow: [BoxShadow(color: chapterColor.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2))],
                                 ),
                                 const SizedBox(height: 6),
                                 Row(
                                   children: [
-                                    Image.asset('assets/xp.png', width: 12, height: 12),
+                                    Icon(Icons.bolt, color: chapterColor, size: 20),
                                     const SizedBox(width: 4),
                                     Text(
                                       '${_getChapterEarnedXp()}/${_getChapterTotalXp()} XP',
                                       style: GoogleFonts.spaceGrotesk(
-                                        color: Colors.white.withOpacity(0.4),
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ],
@@ -469,7 +474,7 @@ class _QuizScreenState extends State<QuizScreen> {
                                               curve: Curves.easeInOut,
                                               alignment: 0.3,
                                             );
-                                            _showLevelPopup(context, lvl, chapter['title'] ?? 'Chapter', levels.length, isLevelLocked, isPrevDone, nodeColor, chapter['is_locked'] == true);
+                                            _showLevelPopup(context, lvl, chapter['title'] ?? 'Chapter', levels.length, isLevelLocked, isPrevDone, nodeColor, chapter['is_locked'] == true, isLeft);
                                           },
                                           builder: (isPressed) => _hexNodeWithLabel(
                                             lvl['name']?.toUpperCase() ?? 'UNTITLED', 
@@ -648,7 +653,7 @@ class _QuizScreenState extends State<QuizScreen> {
       ),
     );
   }
-  void _showLevelPopup(BuildContext context, dynamic lvl, String chapterTitle, int totalLevels, bool isLevelLocked, bool isPrevDone, Color themeColor, bool isChapterLocked) {
+  void _showLevelPopup(BuildContext context, dynamic lvl, String chapterTitle, int totalLevels, bool isLevelLocked, bool isPrevDone, Color themeColor, bool isChapterLocked, bool isLeft) {
     _hideLevelPopup();
 
     setState(() {
@@ -657,9 +662,6 @@ class _QuizScreenState extends State<QuizScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      
-      final int index = ApiService.toInt(lvl['order_index'] ?? 1) - 1;
-      final bool isLeft = index % 2 == 0;
       
       final screenWidth = MediaQuery.of(context).size.width;
       final double calculatedWidth = screenWidth - 40.0;

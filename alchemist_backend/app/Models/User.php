@@ -68,6 +68,11 @@ class User extends Authenticatable
         return $this->belongsTo(Avatar::class, 'equipped_avatar_id');
     }
 
+    public function selectedRank()
+    {
+        return $this->belongsTo(Rank::class, 'selected_rank_id');
+    }
+
     /**
      * Check if streak should be reset (called on login/me)
      */

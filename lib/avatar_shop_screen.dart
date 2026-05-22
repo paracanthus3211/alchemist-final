@@ -18,6 +18,7 @@ class _AvatarShopScreenState extends State<AvatarShopScreen> {
   List<dynamic> _myAvatars = [];
   int? _equippedId;
   bool _isLoading = true;
+  bool _isSaving = false;
   
   late PageController _pageController;
   int _currentPageIndex = 0;
@@ -457,23 +458,34 @@ class _AvatarShopScreenState extends State<AvatarShopScreen> {
                                 backgroundColor: _btnTeal,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
-                              onPressed: () async {
+                              onPressed: _isSaving ? null : () async {
                                 final avatarId = _allAvatars[_currentPageIndex]['id'];
                                 final isUnlocked = _myAvatars.any((m) => m['id'] == avatarId);
                                 if (isUnlocked) {
-                                  // Save color too
-                                  String? hex;
-                                  if (_selectedColor != null) {
-                                    hex = '#${_selectedColor!.value.toRadixString(16).substring(2).toUpperCase()}';
+                                  setState(() => _isSaving = true);
+                                  try {
+                                    // Save color too
+                                    String? hex;
+                                    if (_selectedColor != null) {
+                                      hex = '#${_selectedColor!.value.toRadixString(16).substring(2).toUpperCase()}';
+                                    }
+                                    await _api.updateProfileBgColor(hex);
+                                    await _equip(avatarId);
+                                    if (mounted) Navigator.pop(context);
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
+                                    }
+                                  } finally {
+                                    if (mounted) setState(() => _isSaving = false);
                                   }
-                                  await _api.updateProfileBgColor(hex);
-                                  await _equip(avatarId);
-                                  if (mounted) Navigator.pop(context);
                                 } else {
                                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar is locked!')));
                                 }
                               },
-                              child: const Text('SAVE AVATAR', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+                              child: _isSaving
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                  : const Text('SAVE AVATAR', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
                             ),
                           ),
                         ],

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'welcome_screen.dart';
+import 'intro_screen.dart';
 import 'services/settings_service.dart';
 
 void main() {
@@ -45,7 +45,7 @@ class MyApp extends StatelessWidget {
               child: child!,
             );
           },
-          home: const WelcomeScreen(),
+          home: const IntroScreen(),
         );
       },
     );

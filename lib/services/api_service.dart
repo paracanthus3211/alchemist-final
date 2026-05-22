@@ -18,7 +18,27 @@ class ApiService extends ChangeNotifier {
   AppUser? _currentUser;
   String? _token;
 
+  // Cache-busting version — increments every time the user equips a new avatar
+  static int _avatarVersion = 0;
+
   AppUser? get currentUser => _currentUser;
+
+  static String getAvatarUrl(String? path, {String? fallbackSeed}) {
+    if (path == null || path.isEmpty) {
+      return 'https://i.pravatar.cc/150?u=${fallbackSeed ?? 'alchemist'}';
+    }
+    // Append cache-buster so Flutter & the browser always fetch fresh image
+    final cacheBuster = 'v=$_avatarVersion';
+    if (!path.startsWith('http')) {
+      final cleanBase = baseUrl.replaceAll('/api', '');
+      return '$cleanBase/$path?$cacheBuster';
+    }
+    // Skip cache-busting for external placeholder URLs
+    if (path.contains('pravatar.cc') || path.contains('gravatar.com')) {
+      return path;
+    }
+    return '$path?$cacheBuster';
+  }
 
   static int toInt(dynamic value) {
     if (value == null) return 0;
@@ -108,8 +128,8 @@ class ApiService extends ChangeNotifier {
             email: _currentUser!.email,
             role: _currentUser!.role,
             totalXp: newTotalXp,
-            streakCount: _currentUser!.streakCount,
-            maxStreak: _currentUser!.maxStreak,
+            streakCount: data['streak'] ?? _currentUser!.streakCount,
+            maxStreak: data['max_streak'] ?? _currentUser!.maxStreak,
             avatarUrl: _currentUser!.avatarUrl,
             equippedAvatarId: _currentUser!.equippedAvatarId,
             createdAt: _currentUser!.createdAt,
@@ -209,7 +229,7 @@ class ApiService extends ChangeNotifier {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final int newTotal = data['total_xp'] ?? ((_currentUser?.totalXp ?? 0) + xpAmount);
-        _updateLocalXp(newTotal);
+        _updateLocalXp(newTotal, streak: data['streak'], maxStreak: data['max_streak']);
       } else {
         _updateLocalXp((_currentUser?.totalXp ?? 0) + xpAmount);
       }
@@ -219,7 +239,7 @@ class ApiService extends ChangeNotifier {
     }
   }
 
-  void _updateLocalXp(int newTotal) {
+  void _updateLocalXp(int newTotal, {int? streak, int? maxStreak}) {
     if (_currentUser != null) {
       _currentUser = AppUser(
         id: _currentUser!.id,
@@ -227,8 +247,8 @@ class ApiService extends ChangeNotifier {
         email: _currentUser!.email,
         role: _currentUser!.role,
         totalXp: newTotal,
-        streakCount: _currentUser!.streakCount,
-        maxStreak: _currentUser!.maxStreak,
+        streakCount: streak ?? _currentUser!.streakCount,
+        maxStreak: maxStreak ?? _currentUser!.maxStreak,
         avatarUrl: _currentUser!.avatarUrl,
         equippedAvatarId: _currentUser!.equippedAvatarId,
         createdAt: _currentUser!.createdAt,
@@ -287,6 +307,11 @@ class ApiService extends ChangeNotifier {
         },
       );
       if (response.statusCode == 200) {
+        // Bump version so every URL gets a new cache-buster param
+        _avatarVersion++;
+        // Clear Flutter's in-memory image cache
+        PaintingBinding.instance.imageCache.clear();
+        PaintingBinding.instance.imageCache.clearLiveImages();
         // Refresh full user data to get the new avatarUrl from server
         await getCurrentUser();
         return true;

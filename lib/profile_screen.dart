@@ -38,6 +38,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _loadData();
     SettingsService().addListener(_rebuild);
+    ApiService().addListener(_rebuild);
   }
 
   void _rebuild() {
@@ -47,6 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     SettingsService().removeListener(_rebuild);
+    ApiService().removeListener(_rebuild);
     super.dispose();
   }
 
@@ -140,15 +142,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _getAvatarUrl(AppUser? user) {
-    if (user == null || user.avatarUrl == null || user.avatarUrl!.isEmpty) {
-      return 'https://i.pravatar.cc/150?u=${user?.username ?? 'alchemist'}';
-    }
-    String url = user.avatarUrl!;
-    if (!url.startsWith('http')) {
-      final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
-      return '$baseUrl/$url';
-    }
-    return url;
+    return ApiService.getAvatarUrl(user?.avatarUrl, fallbackSeed: user?.username);
   }
 
   @override
@@ -160,8 +154,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       removeSafeAreaPadding: true,
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
+        body: RefreshIndicator(
+          onRefresh: _loadData,
+          color: _cyan,
+          backgroundColor: _bgCard,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           child: Column(
             children: [
               if (!_isSelf)
@@ -202,6 +200,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -240,6 +239,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: ClipOval(
                   child: Image.network(
                     _getAvatarUrl(user),
+                    key: ValueKey(_getAvatarUrl(user)),
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Center(

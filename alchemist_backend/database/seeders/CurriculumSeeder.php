@@ -14,71 +14,31 @@ class CurriculumSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Create Chapter
-        $chapter = Chapter::create([
-            'title'         => 'Pengenalan Atom',
-            'icon_emoji'    => '⚛️',
+        // 1.5 Create Chapter 2 (asd)
+        $chapter2 = Chapter::create([
+            'title'         => 'asd',
+            'icon_emoji'    => '#FF0055',
             'xp_threshold'  => 0,
-            'order_index'   => 1,
+            'order_index'   => 2,
         ]);
 
-        // 2. Create Levels
-        $level1 = Level::create([
-            'chapter_id'  => $chapter->id,
-            'name'        => 'Struktur Inti Atom',
+        // 2.5 Create Levels for Chapter 2
+        $level2 = Level::create([
+            'chapter_id'  => $chapter2->id,
+            'name'        => 'rt',
             'xp_required' => 0,
             'order_index' => 1,
         ]);
 
-        Level::create([
-            'chapter_id'  => $chapter->id,
-            'name'        => 'Konfigurasi Elektron',
-            'xp_required' => 150,
-            'order_index' => 2,
-        ]);
-
-        // 3. Create Questions for Level 1
+        // 3.5 Create Questions for Chapter 2 Level "rt"
         Question::create([
-            'level_id'      => $level1->id,
+            'level_id'      => $level2->id,
             'type'          => 'MULTIPLE_CHOICE',
-            'question_text' => 'Partikel bermuatan positif dalam inti atom disebut...',
-            'explanation'   => 'Proton adalah partikel penyusun inti atom yang memiliki muatan listrik positif.',
-            'xp_reward'     => 20,
+            'question_text' => 'Dummy question for asd',
+            'explanation'   => 'Explanation',
+            'xp_reward'     => 5,
             'order_index'   => 1,
         ]);
-
-        $qLab = Question::create([
-            'level_id'      => $level1->id,
-            'type'          => 'LAB_PRACTICE',
-            'question_text' => 'Lakukan eksperimen pencampuran Asam Klorida (HCl) dan Natrium Hidroksida (NaOH)! Apa yang kamu amati?',
-            'explanation'   => 'Reaksi antara asam kuat (HCl) dan basa kuat (NaOH) adalah reaksi netralisasi yang menghasilkan garam (NaCl) dan air (H2O).',
-            'xp_reward'     => 50,
-            'order_index'   => 3,
-        ]);
-
-        \App\Models\LabPracticeConfig::create([
-            'question_id' => $qLab->id,
-            'beaker_a_chemical' => 'hcl',
-            'beaker_b_chemical' => 'naoh',
-            'expected_visual_result' => '💧 Larutan menjadi bening dan melepaskan panas (Sedikit Hangat)',
-            'expected_reaction_equation' => 'HCl + NaOH -> NaCl + H2O',
-        ]);
-
-        $options = [
-            ['label' => 'A', 'text' => 'Terbentuk gas beracun', 'correct' => false],
-            ['label' => 'B', 'text' => 'Larutan menjadi bening dan hangat', 'correct' => true],
-            ['label' => 'C', 'text' => 'Terbentuk endapan berwarna merah', 'correct' => false],
-            ['label' => 'D', 'text' => 'Tidak terjadi reaksi apapun', 'correct' => false],
-        ];
-
-        foreach ($options as $opt) {
-            \App\Models\MultipleChoiceOption::create([
-                'question_id' => $qLab->id,
-                'option_label' => $opt['label'],
-                'option_text' => $opt['text'],
-                'is_correct' => $opt['correct'],
-            ]);
-        }
 
         // 4. Create Ranks
         $ranks = [

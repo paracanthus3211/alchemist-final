@@ -168,7 +168,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
                         name: u['username'] ?? 'User',
                         level: 'LVL ${u['level'] ?? 1}',
                         rank: u['rank_title'] ?? 'Novice',
-                        avatarUrl: u['avatar_url'],
+                        avatarUrl: ApiService.getAvatarUrl(u['avatar_url'], fallbackSeed: u['username']),
                         rankColor: _cyan,
                         onTap: () {
                           Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: int.tryParse(uid))));
@@ -225,7 +225,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
                         name: f['username'] ?? 'User',
                         level: 'LVL ${f['level'] ?? 1}',
                         rank: f['rank_title'] ?? 'Alchemist',
-                        avatarUrl: f['avatar_url'],
+                        avatarUrl: ApiService.getAvatarUrl(f['avatar_url'], fallbackSeed: f['username']),
                         rankColor: _cyan,
                         isOnline: f['is_online'] == true,
                         onTap: () {
@@ -268,7 +268,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
             level: 'LVL ${r['level'] ?? 1}',
             rank: r['rank_title'] ?? 'Novice',
             timeAgo: r['time_ago'] ?? 'recently',
-            avatarUrl: r['avatar_url'],
+            avatarUrl: ApiService.getAvatarUrl(r['avatar_url'], fallbackSeed: r['username']),
             rankColor: _getRankColor(r['rank_title'] ?? ''),
             onAccept: () => _acceptRequest(rid),
             onIgnore: () => _declineRequest(rid),

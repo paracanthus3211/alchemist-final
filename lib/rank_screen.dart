@@ -112,7 +112,7 @@ class _RankScreenState extends State<RankScreen> {
                       CircleAvatar(
                         radius: 20, 
                         backgroundColor: _parseColor(user?.profileBgColor) ?? Colors.transparent,
-                        backgroundImage: NetworkImage(user?.avatarUrl ?? 'https://i.pravatar.cc/150?u=${user?.username ?? 'admin'}'),
+                        backgroundImage: NetworkImage(ApiService.getAvatarUrl(user?.avatarUrl, fallbackSeed: user?.username ?? 'admin')),
                         child: user?.avatarUrl == null ? const Icon(Icons.person, size: 22) : null,
                       ),
                       if (_displayRankData != null && _displayRankData!['icon_url'] != null)
@@ -466,7 +466,7 @@ class _RankScreenState extends State<RankScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(4),
                   child: CircleAvatar(
-                    backgroundImage: user['avatar_url'] != null ? NetworkImage(user['avatar_url']) : null,
+                    backgroundImage: user['avatar_url'] != null ? NetworkImage(ApiService.getAvatarUrl(user['avatar_url'], fallbackSeed: user['username'])) : null,
                     backgroundColor: userColor,
                     child: user['avatar_url'] == null ? Icon(Icons.person, color: Colors.white.withOpacity(0.5), size: size * 0.6) : null,
                   ),
@@ -525,7 +525,7 @@ class _RankScreenState extends State<RankScreen> {
                       padding: const EdgeInsets.all(3),
                       child: CircleAvatar(
                         backgroundColor: itemColor,
-                        backgroundImage: user['avatar_url'] != null ? NetworkImage(user['avatar_url']) : null,
+                        backgroundImage: user['avatar_url'] != null ? NetworkImage(ApiService.getAvatarUrl(user['avatar_url'], fallbackSeed: user['username'])) : null,
                         child: user['avatar_url'] == null ? const Icon(Icons.person, color: Colors.white24, size: 20) : null,
                       ),
                     ),

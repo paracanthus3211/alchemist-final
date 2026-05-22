@@ -209,14 +209,12 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
           children: [
             _buildCustomHeader(),
             Expanded(
-              child: Stack(
-                children: [
-                  _buildQuestionContent(currentQuestion),
-                  if (_showExplanation) _buildExplanationOverlay(currentQuestion),
-                ],
-              ),
+              child: _buildQuestionContent(currentQuestion),
             ),
-            _buildFooterActions(),
+            if (_showExplanation)
+              _buildExplanationSection(currentQuestion)
+            else
+              _buildFooterActions(),
           ],
         ),
       ),
@@ -516,65 +514,35 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
   }
 
   Widget _buildFooterActions() {
-    bool isContinue = _showExplanation;
-    Color baseColor = isContinue ? const Color(0xFF8AAF00) : const Color(0xFF00BCD4);
-    Color shadowColor = isContinue ? const Color(0xFF5A7A00) : const Color(0xFF006064);
-
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
       child: GestureDetector(
         onTapDown: (_) => setState(() => _isCheckPressed = true),
         onTapUp: (_) => setState(() => _isCheckPressed = false),
         onTapCancel: () => setState(() => _isCheckPressed = false),
-        onTap: () {
-          final currentQuestion = _activeQuestions[_currentIndex];
-          if (_showExplanation) {
-            _nextQuestion();
-            return;
-          }
-          if (currentQuestion['type'] == 'SENTENCE_ARRANGEMENT') {
-            final List<dynamic> wordsData = List.from(currentQuestion['sentence_arrangement_words'] ?? []);
-            wordsData.sort((a, b) => ApiService.toInt(a['correct_order_index']).compareTo(ApiService.toInt(b['correct_order_index'])));
-            String correctAnswer = wordsData.map((e) => e['word_text'].toString()).join(' ');
-            String finalResult = _userArrangement.join(' ');
-            _handleAnswer(finalResult.trim() == correctAnswer.trim());
-          } else if (currentQuestion['type'] == 'MULTIPLE_CHOICE' || currentQuestion['type'] == 'LAB_PRACTICE') {
-            if (_selectedOptionIndex != null) {
-              final options = currentQuestion['multiple_choice_options'] as List? ?? [];
-              final isCorrectOption = options[_selectedOptionIndex!]['is_correct'] ?? false;
-              bool correctOption = isCorrectOption is int ? isCorrectOption == 1 : isCorrectOption == true;
-              bool finalResult = correctOption;
-              if (currentQuestion['type'] == 'LAB_PRACTICE') {
-                finalResult = correctOption && _isCorrectMix;
-              }
-              _handleAnswer(finalResult);
-              _selectedOptionIndex = null;
-              _isCorrectMix = false;
-            }
-          }
-        },
+        onTap: _handleCheckButton,
         child: Container(
-          height: 58,
+          height: 54,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: shadowColor,
+            color: const Color(0xFF006064),
             borderRadius: BorderRadius.circular(14),
           ),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 100),
-            height: 52,
-            transform: Matrix4.translationValues(0, _isCheckPressed ? 0 : -6, 0),
+            height: 50,
+            transform: Matrix4.translationValues(0, _isCheckPressed ? 0 : -4, 0),
             decoration: BoxDecoration(
-              color: baseColor,
+              color: const Color(0xFF00BCD4),
               borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
             child: Text(
-              isContinue ? 'CONTINUE' : 'CHECK',
+              'CHECK',
               style: GoogleFonts.spaceGrotesk(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
-                fontSize: 18,
+                fontSize: 16,
                 letterSpacing: 2.0,
               ),
             ),
@@ -582,6 +550,30 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
         ),
       ),
     );
+  }
+
+  void _handleCheckButton() {
+    final currentQuestion = _activeQuestions[_currentIndex];
+    if (currentQuestion['type'] == 'SENTENCE_ARRANGEMENT') {
+      final List<dynamic> wordsData = List.from(currentQuestion['sentence_arrangement_words'] ?? []);
+      wordsData.sort((a, b) => ApiService.toInt(a['correct_order_index']).compareTo(ApiService.toInt(b['correct_order_index'])));
+      String correctAnswer = wordsData.map((e) => e['word_text'].toString()).join(' ');
+      String finalResult = _userArrangement.join(' ');
+      _handleAnswer(finalResult.trim() == correctAnswer.trim());
+    } else if (currentQuestion['type'] == 'MULTIPLE_CHOICE' || currentQuestion['type'] == 'LAB_PRACTICE') {
+      if (_selectedOptionIndex != null) {
+        final options = currentQuestion['multiple_choice_options'] as List? ?? [];
+        final isCorrectOption = options[_selectedOptionIndex!]['is_correct'] ?? false;
+        bool correctOption = isCorrectOption is int ? isCorrectOption == 1 : isCorrectOption == true;
+        bool finalResult = correctOption;
+        if (currentQuestion['type'] == 'LAB_PRACTICE') {
+          finalResult = correctOption && _isCorrectMix;
+        }
+        _handleAnswer(finalResult);
+        _selectedOptionIndex = null;
+        _isCorrectMix = false;
+      }
+    }
   }
 
   // Removed duplicate _wordChip and _buildActionButtons
@@ -607,99 +599,116 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
     );
   }
 
-  Widget _buildExplanationOverlay(dynamic question) {
+  Widget _buildExplanationSection(dynamic question) {
     bool isCorrect = _isLastResultCorrect;
-    Color cardColor = isCorrect ? const Color(0xFF8AAF00) : const Color(0xFFC62828);
-    Color titleColor = Colors.white;
+    Color bgColor = isCorrect ? const Color(0xFF8AAF00) : const Color(0xFFC62828);
 
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: Colors.black.withValues(alpha: 0.88),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, (1 - value) * 200),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
       child: Container(
-        padding: const EdgeInsets.all(24),
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
         decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(16),
+          color: bgColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF00BCD4),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isCorrect ? Icons.check : Icons.close,
-                    color: Colors.white,
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  isCorrect ? 'CORRECT ANSWER' : 'WRONG ANSWER',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: titleColor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            Text(
-              question['explanation'] ?? 'Lorem ipsum is placeholder or "dummy" text used in graphic design, web design, and printing to fill layout spaces and demonstrate visual styles (fonts, typography, layouts) without using meaningful content. It ensures...',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.spaceGrotesk(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                height: 1.6,
-              ),
-            ),
-            const SizedBox(height: 40),
-            // Read More Button
-            GestureDetector(
-              onTapDown: (_) => setState(() => _isReadMorePressed = true),
-              onTapUp: (_) => setState(() => _isReadMorePressed = false),
-              onTapCancel: () => setState(() => _isReadMorePressed = false),
-              onTap: () => _showExplanationDetail(question),
-              child: Container(
-                height: 54,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF006064),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 100),
-                  height: 50,
-                  transform: Matrix4.translationValues(0, _isReadMorePressed ? 0 : -6, 0),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00BCD4),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'READ MORE',
-                    style: GoogleFonts.spaceGrotesk(
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // CORRECT / WRONG ANSWER header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isCorrect ? Icons.check : Icons.close,
                       color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      letterSpacing: 1.5,
+                      size: 20,
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Text(
+                    isCorrect ? 'CORRECT ANSWER' : 'WRONG ANSWER',
+                    style: GoogleFonts.spaceGrotesk(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 20),
+              // EXPLANATION button (cyan)
+              _build3DButton(
+                text: 'EXPLANATION',
+                baseColor: const Color(0xFF00BCD4),
+                shadowColor: const Color(0xFF006064),
+                onTap: () => _showExplanationDetail(question),
+              ),
+              const SizedBox(height: 10),
+              // CONTINUE button (lime)
+              _build3DButton(
+                text: 'CONTINUE',
+                baseColor: const Color(0xFFCCFF00),
+                shadowColor: const Color(0xFF8AAF00),
+                textColor: Colors.black,
+                onTap: _nextQuestion,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _build3DButton({
+    required String text,
+    required Color baseColor,
+    required Color shadowColor,
+    Color textColor = Colors.white,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 54,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: shadowColor,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Container(
+          height: 50,
+          transform: Matrix4.translationValues(0, -4, 0),
+          decoration: BoxDecoration(
+            color: baseColor,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            text,
+            style: GoogleFonts.spaceGrotesk(
+              color: textColor,
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+              letterSpacing: 1.5,
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -785,32 +794,6 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
                             ),
                           ),
                           const SizedBox(height: 28),
-                          // Question text
-                          Text(
-                            'PERTANYAAN',
-                            style: GoogleFonts.spaceGrotesk(
-                              color: Colors.white38,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            question['question_text'] ?? '',
-                            style: GoogleFonts.spaceGrotesk(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 28),
-                          // Divider
-                          Container(
-                            height: 1,
-                            color: Colors.white.withValues(alpha: 0.06),
-                          ),
                           const SizedBox(height: 28),
                           // Explanation label
                           Text(

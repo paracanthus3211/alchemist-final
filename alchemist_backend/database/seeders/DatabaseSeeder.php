@@ -10,31 +10,40 @@ class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // 1. Create Admin User
-        User::factory()->create([
-            'username' => 'admin',
-            'email' => 'admin@alchemist.com',
-            'password' => 'password',
-            'role' => 'ADMIN',
+        // Hapus akun yang mungkin sudah ada agar tidak duplikat
+        User::whereIn('email', ['admin@alchemist.com', 'user@alchemist.com'])->delete();
+
+        // 1. Akun Admin
+        // NOTE: password cast 'hashed' on User model handles bcrypt automatically
+        User::create([
+            'username'         => 'admin',
+            'email'            => 'admin@alchemist.com',
+            'password'         => 'password',   // cast 'hashed' will bcrypt this
+            'role'             => 'ADMIN',
+            'xp'               => 9999,
+            'streak_count'     => 30,
+            'profile_bg_color' => '#00897B',
         ]);
 
-        // 2. Create Regular User
-        User::factory()->create([
-            'username' => 'user',
-            'email' => 'user@alchemist.com',
-            'password' => 'password',
-            'role' => 'USER',
+        // 2. Akun User biasa
+        User::create([
+            'username'         => 'Paracanthus',
+            'email'            => 'user@alchemist.com',
+            'password'         => 'password',   // cast 'hashed' will bcrypt this
+            'role'             => 'USER',
+            'xp'               => 550,
+            'streak_count'     => 3,
+            'profile_bg_color' => '#1565C0',
         ]);
 
-        // 3. Call Curriculum Seeder
+        // 3. Curriculum & task data
         $this->call([
             CurriculumSeeder::class,
+            DailyTaskSeeder::class,
             UserSeeder::class,
+            ArticleAndProgressSeeder::class,
         ]);
     }
 }
