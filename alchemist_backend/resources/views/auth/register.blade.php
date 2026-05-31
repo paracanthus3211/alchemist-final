@@ -6,7 +6,6 @@
     <title>Create Account - Alchemist</title>
     <meta name="description" content="Create your Alchemist account and master the elements of your future.">
 
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Silkscreen&display=swap" rel="stylesheet">
@@ -319,95 +318,74 @@
 <body>
     <div class="page">
 
-        <!-- Logo -->
         <a href="/" class="site-logo">ALCHEMIST</a>
 
-        <!-- Title -->
         <h1 class="page-title">Create Your <span>Account</span></h1>
 
-        <!-- Social Buttons + Manual toggle -->
         <div class="social-group">
-        <a href="#" id="btn-facebook" class="social-btn btn-facebook">
-            <!-- Facebook icon -->
-            <svg class="fb-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.791-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.885v2.271h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073Z"/>
-            </svg>
-            Continue with Facebook
-        </a>
+            <a href="#" class="manual-link" id="toggle-manual" onclick="toggleForm(event)">Sign Up Manually</a>
+        </div>
 
-        <a href="#" id="btn-google" class="social-btn btn-google">
-            <!-- Google icon -->
-            <svg class="fb-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Continue with Google
-        </a>
-
-        <!-- Manual signup toggle -->
-        <a href="#" class="manual-link" id="toggle-manual" onclick="toggleForm(event)">Sign Up Manually</a>
-        </div><!-- end .social-group -->
-
-        <!-- Form Card -->
         <div class="form-card" id="manual-form">
-            <form method="POST" action="{{ route('register') }}">
+            <form id="register-form">
                 @csrf
 
-                <!-- Username -->
+                <div class="error-box" id="error-box" style="display:none; background: rgba(255, 107, 107, 0.1); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px; color: #ff6b6b; font-size: 0.875rem;"></div>
+
                 <div class="field">
-                    <label class="field-label" for="name">Username</label>
+                    <label class="field-label" for="firstname">First Name</label>
                     <div class="input-wrap">
-                        <!-- Person icon -->
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="8" r="4"/>
                             <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
                         </svg>
                         <input
                             type="text"
-                            id="name"
-                            name="name"
-                            placeholder="Nikola Tesla"
-                            value="{{ old('name') }}"
-                            autocomplete="name"
+                            id="firstname"
+                            name="firstname"
+                            placeholder="Nikola"
                             required
                         >
                     </div>
-                    @error('name')
-                        <span class="error-msg">{{ $message }}</span>
-                    @enderror
                 </div>
 
-                <!-- Email -->
                 <div class="field">
-                    <label class="field-label" for="email">Email Address</label>
+                    <label class="field-label" for="lastname">Last Name</label>
                     <div class="input-wrap">
-                        <!-- Envelope icon -->
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="2" y="4" width="20" height="16" rx="2"/>
-                            <path d="M2 8l10 6 10-6"/>
+                            <circle cx="12" cy="8" r="4"/>
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
                         </svg>
                         <input
-                            type="email"
-                            id="email"
-                            name="email"
-                            placeholder="scientist@alchemist.io"
-                            value="{{ old('email') }}"
-                            autocomplete="email"
+                            type="text"
+                            id="lastname"
+                            name="lastname"
+                            placeholder="Tesla"
                             required
                         >
                     </div>
-                    @error('email')
-                        <span class="error-msg">{{ $message }}</span>
-                    @enderror
                 </div>
 
-                <!-- Password -->
+                <div class="field">
+                    <label class="field-label" for="username">Username</label>
+                    <div class="input-wrap">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="8" r="4"/>
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                        </svg>
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            placeholder="nikolatesla12"
+                            required
+                        >
+                    </div>
+                </div>
+
                 <div class="field">
                     <label class="field-label" for="password">Password</label>
                     <div class="input-wrap">
-                        <!-- Lock icon -->
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="5" y="11" width="14" height="10" rx="2"/>
                             <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
@@ -421,21 +399,31 @@
                             required
                         >
                     </div>
-                    @error('password')
-                        <span class="error-msg">{{ $message }}</span>
-                    @enderror
                 </div>
 
-                <!-- Hidden confirm password (same value forwarded) -->
-                <input type="hidden" name="password_confirmation" id="password_confirm">
+                <div class="field">
+                    <label class="field-label" for="password_confirmation">Confirm Password</label>
+                    <div class="input-wrap">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="5" y="11" width="14" height="10" rx="2"/>
+                            <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+                        </svg>
+                        <input
+                            type="password"
+                            id="password_confirmation"
+                            name="password_confirmation"
+                            placeholder="············"
+                            autocomplete="new-password"
+                            required
+                        >
+                    </div>
+                </div>
 
-                <!-- Submit -->
                 <button type="submit" class="btn-register" id="btn-register">
                     Register Account
                 </button>
             </form>
 
-            <!-- Footer -->
             <p class="footer-link">
                 Already have an account?
                 <a href="{{ route('login') }}">Log In →</a>
@@ -445,10 +433,110 @@
     </div>
 
     <script>
-        // Auto-sync password_confirmation with password
-        document.getElementById('password').addEventListener('input', function () {
-            document.getElementById('password_confirm').value = this.value;
+        const form = document.getElementById('register-form');
+        const btnRegister = document.getElementById('btn-register');
+        const errorBox = document.getElementById('error-box');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const firstname = document.getElementById('firstname').value.trim();
+            const lastname = document.getElementById('lastname').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const passwordConfirmation = document.getElementById('password_confirmation').value;
+
+            // Validation
+            if (!firstname || !lastname || !username || !password || !passwordConfirmation) {
+                showError('Semua field harus diisi');
+                return;
+            }
+
+            if (password !== passwordConfirmation) {
+                showError('Konfirmasi password tidak cocok');
+                return;
+            }
+
+            if (password.length < 6) {
+                showError('Password minimal 6 karakter');
+                return;
+            }
+
+            btnRegister.disabled = true;
+            btnRegister.textContent = 'PROSES REGISTRASI...';
+            errorBox.style.display = 'none';
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+                console.log('Sending registration request to /api/register');
+
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        first_name: firstname,
+                        last_name: lastname,
+                        username: username,
+                        password: password,
+                        password_confirmation: passwordConfirmation
+                    }),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+
+                const data = await response.json().catch(async err => {
+                    console.error('Failed to parse JSON:', err);
+                    const text = await response.text();
+                    console.error('Response text:', text.substring(0, 500));
+                    return null;
+                });
+
+                if (!data) {
+                    showError('Server returned invalid response. Check console for details.');
+                    btnRegister.disabled = false;
+                    btnRegister.textContent = 'REGISTER ACCOUNT';
+                    return;
+                }
+
+                if (response.ok && data.status === 'success') {
+                    // Redirect setelah sukses registrasi
+                    window.location.href = '/login';
+                } else {
+                    let errorMsg = 'Registrasi gagal';
+                    if (data.errors) {
+                        if (data.errors.username) {
+                            errorMsg = 'Username sudah digunakan';
+                        } else {
+                            errorMsg = Object.values(data.errors)[0][0];
+                        }
+                    } else if (data.message) {
+                        errorMsg = data.message;
+                    }
+                    console.error('Registration response:', data);
+                    showError(errorMsg);
+                    btnRegister.disabled = false;
+                    btnRegister.textContent = 'REGISTER ACCOUNT';
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                showError('Terjadi kesalahan. Coba lagi. (' + error.message + ')');
+                btnRegister.disabled = false;
+                btnRegister.textContent = 'REGISTER ACCOUNT';
+            }
         });
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.display = 'block';
+        }
 
         // Toggle manual form visibility
         function toggleForm(e) {

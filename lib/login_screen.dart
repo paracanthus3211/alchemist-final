@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'widgets/background_wrapper.dart';
 import 'widgets/custom_text_field.dart';
-import 'widgets/social_button.dart';
 import 'widgets/custom_back_button.dart';
 import 'signup_screen.dart';
 import 'main_scaffold.dart';
@@ -87,37 +86,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 32),
-            
-            SocialButton(
-              text: 'CONTINUE WITH FACEBOOK',
-              backgroundColor: const Color(0xFF1877F2),
-              textColor: Colors.white,
-              icon: const Icon(Icons.facebook, color: Colors.white, size: 24),
-              onPressed: () {},
-            ),
-            SocialButton(
-              text: 'CONTINUE WITH GOOGLE',
-              backgroundColor: Colors.white,
-              textColor: Colors.black,
-              icon: _googleIcon(),
-              onPressed: () {},
-            ),
-            
-            const SizedBox(height: 32),
-            
-            Center(
-              child: Text(
-                'LOG IN MANUALLY',
-                style: TextStyle(
-                  color: const Color(0xFF00E5FF).withValues(alpha: 0.8),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
-                ),
-              ),
-            ),
-            
             const SizedBox(height: 32),
             
             _buildLoginFormCard(context),
@@ -279,22 +247,6 @@ class _LoginScreenState extends State<LoginScreen> {
           fontWeight: FontWeight.bold,
           letterSpacing: 1.5,
         ),
-      ),
-    );
-  }
-
-  Widget _googleIcon() {
-    return RichText(
-      text: const TextSpan(
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        children: [
-          TextSpan(text: 'G', style: TextStyle(color: Color(0xFF4285F4))), // Google Blue
-          TextSpan(text: 'o', style: TextStyle(color: Color(0xFFEA4335))), // Google Red
-          TextSpan(text: 'o', style: TextStyle(color: Color(0xFFFBBC05))), // Google Yellow
-          TextSpan(text: 'g', style: TextStyle(color: Color(0xFF4285F4))), // Google Blue
-          TextSpan(text: 'l', style: TextStyle(color: Color(0xFF34A853))), // Google Green
-          TextSpan(text: 'e', style: TextStyle(color: Color(0xFFEA4335))), // Google Red
-        ],
       ),
     );
   }

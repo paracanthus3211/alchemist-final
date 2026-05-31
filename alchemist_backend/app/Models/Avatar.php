@@ -23,3 +23,4 @@ class Avatar extends Model
         return $this->belongsToMany(User::class, 'user_avatars');
     }
 }
+

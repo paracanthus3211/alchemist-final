@@ -13,3 +13,4 @@ class XpTransaction extends Model
         'xp_amount'
     ];
 }
+

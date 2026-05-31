@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Alchemist')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Silkscreen&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    @livewireStyles
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -24,20 +26,32 @@
         }
 
         html, body {
-            height: 100%; font-family: 'Space Grotesk', sans-serif;
-            background: var(--bg); color: var(--text);
+            height: 100%; 
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg); 
+            color: var(--text);
             overflow: hidden;
+            width: 100%;
         }
 
-        .layout { display: flex; height: 100vh; }
+        .layout { display: flex; height: 100vh; width: 100%; }
 
         /* ── SIDEBAR ── */
         .sidebar {
-            width: 240px; min-width: 240px;
+            width: 240px; 
+            min-width: 240px;
+            max-width: 240px;
             background: var(--sidebar);
             border-right: 1px solid var(--border);
-            display: flex; flex-direction: column;
+            display: flex; 
+            flex-direction: column;
             overflow: hidden;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            flex-shrink: 0;
         }
 
         .sidebar-logo {
@@ -145,13 +159,30 @@
 
         /* ── MAIN CONTENT ── */
         .main {
-            flex: 1; overflow-y: auto;
+            flex: 1; 
+            overflow-y: auto;
+            overflow-x: hidden;
             padding: 32px 40px 80px;
             position: relative;
+            height: auto;
+            min-height: 100vh;
+            margin-left: 240px;
         }
-        .main::-webkit-scrollbar { width: 6px; }
-        .main::-webkit-scrollbar-track { background: transparent; }
-        .main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        .main::-webkit-scrollbar { 
+            width: 8px; 
+        }
+        .main::-webkit-scrollbar-track { 
+            background: rgba(255,255,255,0.02);
+            border-radius: 10px;
+        }
+        .main::-webkit-scrollbar-thumb { 
+            background: rgba(0, 212, 212, 0.4);
+            border-radius: 10px;
+            border: 2px solid rgba(255,255,255,0.02);
+        }
+        .main::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 212, 212, 0.7);
+        }
 
         @media (max-width: 768px) {
             .sidebar { width: 200px; min-width: 200px; }
@@ -164,6 +195,7 @@
 <div class="layout">
 
     <!-- SIDEBAR -->
+    @persist('sidebar')
     <aside class="sidebar">
         <div class="sidebar-logo">ALCHEMIST</div>
 
@@ -224,7 +256,7 @@
 
         <nav class="nav">
             <!-- Home -->
-            <a href="{{ route('home') }}" class="nav-item {{ request()->routeIs('home') ? 'active' : '' }}">
+            <a href="{{ route('home') }}" wire:navigate class="nav-item {{ request()->routeIs('home') ? 'active' : '' }}">
                 <span class="nav-icon">
                     <img src="/images/home_logo.png" alt="Home">
                 </span>
@@ -232,7 +264,7 @@
             </a>
 
             <!-- Quiz -->
-            <a href="{{ route('quiz') }}" class="nav-item {{ request()->routeIs('quiz') ? 'active' : '' }}">
+            <a href="{{ route('quiz') }}" wire:navigate class="nav-item {{ request()->routeIs('quiz') ? 'active' : '' }}">
                 <span class="nav-icon">
                     <img src="/images/quiz_logo.png" alt="Quiz">
                 </span>
@@ -240,13 +272,13 @@
             </a>
 
             @if(auth()->check() && auth()->user()->role === 'ADMIN')
-            <a href="{{ route('admin.daily-tasks.index') }}" class="nav-item {{ request()->routeIs('admin.daily-tasks.*') ? 'active' : '' }}">
+            <a href="{{ route('admin.daily-tasks.index') }}" wire:navigate class="nav-item {{ request()->routeIs('admin.daily-tasks.*') ? 'active' : '' }}">
                 <span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg></span>Daily Task
             </a>
             @endif
 
             <!-- Rank -->
-            <a href="{{ route('rank') }}" class="nav-item {{ request()->routeIs('rank') ? 'active' : '' }}">
+            <a href="{{ route('rank') }}" wire:navigate class="nav-item {{ request()->routeIs('rank') ? 'active' : '' }}">
                 <span class="nav-icon">
                     <img src="/images/rank_logo.png" alt="Rank">
                 </span>
@@ -254,7 +286,7 @@
             </a>
 
             <!-- Profile -->
-            <a href="{{ route('profile') }}" class="nav-item {{ request()->routeIs('profile') ? 'active' : '' }}">
+            <a href="{{ route('profile') }}" wire:navigate class="nav-item {{ request()->routeIs('profile') ? 'active' : '' }}">
                 <span class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
                 </span>
@@ -262,7 +294,7 @@
             </a>
 
             <!-- Library -->
-            <a href="{{ route('library') }}" class="nav-item {{ request()->routeIs('library') ? 'active' : '' }}">
+            <a href="{{ route('library') }}" wire:navigate class="nav-item {{ request()->routeIs('library') ? 'active' : '' }}">
                 <span class="nav-icon">
                     <img src="/images/library_logo.png" alt="Library">
                 </span>
@@ -270,15 +302,23 @@
             </a>
 
             <!-- Virtual Lab -->
-            <a href="#" class="nav-item">
+            <a href="{{ route('virtual_lab') }}" wire:navigate class="nav-item {{ request()->routeIs('virtual_lab') ? 'active' : '' }}">
                 <span class="nav-icon">
                     <img src="/images/logo.png" alt="Virtual Lab" class="octopus-logo">
                 </span>
                 Virtual Lab
             </a>
 
+            <!-- Periodic Table -->
+            <a href="{{ route('periodic_table') }}" wire:navigate class="nav-item {{ request()->routeIs('periodic_table') ? 'active' : '' }}">
+                <span class="nav-icon">
+                    <img src="/images/periodic_table.png" alt="Periodic Table" style="width: 22px; height: 22px;">
+                </span>
+                Periodic Table
+            </a>
+
             <!-- Friends -->
-            <a href="{{ route('friends.index') }}" class="nav-item {{ request()->routeIs('friends.*') ? 'active' : '' }}">
+            <a href="{{ route('friends.index') }}" wire:navigate class="nav-item {{ request()->routeIs('friends.*') ? 'active' : '' }}">
                 <span class="nav-icon">
                     <img src="/images/add_friend.png" alt="Friends">
                 </span>
@@ -286,7 +326,7 @@
             </a>
 
             <!-- Bookmark -->
-            <a href="{{ route('library', ['category' => 'bookmarks']) }}" class="nav-item {{ request()->query('category') === 'bookmarks' ? 'active' : '' }}">
+            <a href="{{ route('library', ['category' => 'bookmarks']) }}" wire:navigate class="nav-item {{ request()->query('category') === 'bookmarks' ? 'active' : '' }}">
                 <span class="nav-icon" style="position: relative;" id="sidebar-bookmark-icon-container">
                     @php
                         $bookmarkCount = auth()->check() ? auth()->user()->bookmarks()->count() : 0;
@@ -318,6 +358,7 @@
             </form>
         </div>
     </aside>
+    @endpersist
 
     <!-- MAIN -->
     <main class="main">
@@ -325,6 +366,29 @@
     </main>
 
 </div>
+@livewireScripts
+<script>
+    document.addEventListener('livewire:navigated', () => {
+        // Update active class on sidebar links based on current URL
+        const currentPath = window.location.pathname;
+        const navItems = document.querySelectorAll('.sidebar .nav-item');
+        
+        navItems.forEach(item => {
+            const href = item.getAttribute('href');
+            if (!href) return;
+            
+            const url = new URL(href, window.location.origin);
+            item.classList.remove('active');
+            
+            // exact match or active tab logic
+            if (currentPath === url.pathname || (currentPath.startsWith(url.pathname) && url.pathname !== '/')) {
+                item.classList.add('active');
+            } else if (currentPath === '/' && url.pathname === '/home') {
+                // Handle edge cases if needed
+            }
+        });
+    });
+</script>
 @stack('scripts')
 </body>
 </html>

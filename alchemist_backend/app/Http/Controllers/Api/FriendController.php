@@ -40,7 +40,7 @@ class FriendController extends Controller
 
             $u->rank_title = $userRank ? $userRank->name : 'Unranked';
             $u->rank_icon_url = $userRank ? $userRank->icon_url : null;
-            $u->avatar_url = $u->equippedAvatar ? $u->equippedAvatar->image_url : ($u->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $u->username);
+            $u->avatar_url = $u->equippedAvatar ? $u->equippedAvatar->image_url : ($u->avatar_url ?: '/images/chapter.png');
 
             $friendship = DB::table('friends')
                 ->where(function ($q) use ($user, $u) {
@@ -124,7 +124,7 @@ class FriendController extends Controller
 
             $f->rank_title = $userRank ? $userRank->name : 'Unranked';
             $f->rank_icon_url = $userRank ? $userRank->icon_url : null;
-            $f->avatar_url = $f->equippedAvatar ? $f->equippedAvatar->image_url : ($f->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $f->username);
+            $f->avatar_url = $f->equippedAvatar ? $f->equippedAvatar->image_url : ($f->avatar_url ?: '/images/chapter.png');
             return $f;
         });
 
@@ -164,7 +164,7 @@ class FriendController extends Controller
 
             $r->rank_title = $userRank ? $userRank->name : 'Unranked';
             $r->rank_icon_url = $userRank ? $userRank->icon_url : null;
-            $r->avatar_url = $r->equippedAvatar ? $r->equippedAvatar->image_url : ($r->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $r->username);
+            $r->avatar_url = $r->equippedAvatar ? $r->equippedAvatar->image_url : ($r->avatar_url ?: '/images/chapter.png');
 
             $r->request_id = $f->id;
             $r->requested_at = $f->created_at;
@@ -225,7 +225,7 @@ class FriendController extends Controller
         
         $user->current_level_name = $userRank ? $userRank->name : 'Unranked';
         $user->rank_icon_url = $userRank ? $userRank->icon_url : null;
-        $user->avatar_url = $user->equippedAvatar ? $user->equippedAvatar->image_url : ($user->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $user->username);
+        $user->avatar_url = $user->equippedAvatar ? $user->equippedAvatar->image_url : ($user->avatar_url ?: '/images/chapter.png');
 
         // Stats
         $following = DB::table('friends')->where('user_id', $user->id)->count();
@@ -380,3 +380,6 @@ class FriendController extends Controller
         ]);
     }
 }
+
+
+

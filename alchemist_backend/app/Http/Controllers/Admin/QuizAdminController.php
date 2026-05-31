@@ -13,26 +13,35 @@ class QuizAdminController extends Controller
 {
     public function index(Request $request)
     {
+        abort_unless(auth()->user()?->role === 'ADMIN', 403);
+
         $user = auth()->user();
-        
+
         $tab = $request->query('tab', 'chapter'); // 'chapter' or 'quiz'
-        
+
         $chapters = Chapter::with('levels.questions')->orderBy('order_index')->get();
         $levelsCount = Level::count();
         $questionsCount = Question::count();
-        
+
+        $levelId = $request->query('level_id');
+
         // For the quiz content tab, we need all questions or we can paginate
-        $questions = Question::with(['level.chapter', 'multipleChoiceOptions', 'sentenceArrangementWords', 'labPracticeConfig'])
-            ->orderBy('order_index')
-            ->get();
-        $levels = Level::orderBy('order_index')->get();
+        $questionsQuery = Question::with(['level.chapter', 'multipleChoiceOptions', 'sentenceArrangementWords', 'labPracticeConfig'])
+            ->orderBy('order_index');
+
+        if ($levelId) {
+            $questionsQuery->where('level_id', $levelId);
+        }
+
+        $questions = $questionsQuery->get();
+        $levels = Level::with('chapter')->orderBy('order_index')->get();
 
         return view('admin.quiz.index', compact(
-            'user', 
-            'chapters', 
-            'levelsCount', 
-            'questionsCount', 
-            'tab', 
+            'user',
+            'chapters',
+            'levelsCount',
+            'questionsCount',
+            'tab',
             'questions',
             'levels'
         ));
@@ -48,6 +57,12 @@ class QuizAdminController extends Controller
             'order_index' => 'nullable|integer',
         ]);
 
+        // Prevent DB error: `order_index` column is NOT NULL.
+        // If it's missing/empty, auto-assign the next index.
+        if (!array_key_exists('order_index', $validated) || $validated['order_index'] === null) {
+            $validated['order_index'] = ((int) (Chapter::max('order_index') ?? 0)) + 1;
+        }
+
         Chapter::create($validated);
 
         return redirect()->route('admin.quiz.index', ['tab' => 'chapter'])
@@ -57,13 +72,19 @@ class QuizAdminController extends Controller
     public function updateChapter(Request $request, $id)
     {
         $chapter = Chapter::findOrFail($id);
-        
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'xp_threshold' => 'required|integer',
             'icon_emoji' => 'nullable|string',
             'order_index' => 'nullable|integer',
         ]);
+
+        // If user didn't provide an order index (empty input becomes null),
+        // don't overwrite the existing value with NULL (DB column is NOT NULL).
+        if (array_key_exists('order_index', $validated) && $validated['order_index'] === null) {
+            unset($validated['order_index']);
+        }
 
         $chapter->update($validated);
 
@@ -93,6 +114,10 @@ class QuizAdminController extends Controller
             'timer_limit' => 'nullable|integer',
         ]);
 
+        if (!array_key_exists('order_index', $validated) || $validated['order_index'] === null) {
+            $validated['order_index'] = ((int) (Level::where('chapter_id', $validated['chapter_id'])->max('order_index') ?? 0)) + 1;
+        }
+
         Level::create($validated);
 
         return redirect()->route('admin.quiz.index', ['tab' => 'chapter'])
@@ -112,6 +137,10 @@ class QuizAdminController extends Controller
             'order_index' => 'nullable|integer',
             'timer_limit' => 'nullable|integer',
         ]);
+
+        if (array_key_exists('order_index', $validated) && $validated['order_index'] === null) {
+            unset($validated['order_index']);
+        }
 
         $level->update($validated);
 
@@ -140,17 +169,23 @@ class QuizAdminController extends Controller
             'order_index' => 'nullable|integer',
         ]);
 
+        if (!array_key_exists('order_index', $validated) || $validated['order_index'] === null) {
+            $validated['order_index'] = ((int) (Question::where('level_id', $validated['level_id'])->max('order_index') ?? 0)) + 1;
+        }
+
         DB::transaction(function () use ($validated, $request) {
             $question = Question::create($validated);
 
             if (($validated['type'] === 'MULTIPLE_CHOICE' || $validated['type'] === 'LAB_PRACTICE') && $request->has('options')) {
                 foreach ($request->input('options') as $option) {
-                    if (empty($option['option_text'])) continue;
+                    if (empty($option['option_text'])) {
+                        continue;
+                    }
                     DB::table('multiple_choice_options')->insert([
                         'question_id' => $question->id,
                         'option_label' => $option['option_label'] ?? 'A',
                         'option_text' => $option['option_text'],
-                        'is_correct' => isset($option['is_correct']) ? (bool)$option['is_correct'] : false,
+                        'is_correct' => isset($option['is_correct']) ? (bool) $option['is_correct'] : false,
                     ]);
                 }
             }
@@ -158,11 +193,15 @@ class QuizAdminController extends Controller
             if ($validated['type'] === 'SENTENCE_ARRANGEMENT') {
                 $words = explode(',', $request->input('words', ''));
                 $orderArr = explode(',', $request->input('correct_order', ''));
-                
+
                 foreach ($words as $index => $word) {
-                    if (empty(trim($word))) continue;
-                    $correctOrderIndex = array_search((string)$index, array_map('trim', $orderArr));
-                    if ($correctOrderIndex === false) $correctOrderIndex = $index;
+                    if (empty(trim($word))) {
+                        continue;
+                    }
+                    $correctOrderIndex = array_search((string) $index, array_map('trim', $orderArr));
+                    if ($correctOrderIndex === false) {
+                        $correctOrderIndex = $index;
+                    }
 
                     DB::table('sentence_arrangement_words')->insert([
                         'question_id' => $question->id,
@@ -200,6 +239,10 @@ class QuizAdminController extends Controller
             'order_index' => 'nullable|integer',
         ]);
 
+        if (array_key_exists('order_index', $validated) && $validated['order_index'] === null) {
+            unset($validated['order_index']);
+        }
+
         DB::transaction(function () use ($validated, $request, $question) {
             $question->update($validated);
             $type = $validated['type'];
@@ -208,12 +251,14 @@ class QuizAdminController extends Controller
                 DB::table('multiple_choice_options')->where('question_id', $question->id)->delete();
                 if ($request->has('options')) {
                     foreach ($request->input('options') as $option) {
-                        if (empty($option['option_text'])) continue;
+                        if (empty($option['option_text'])) {
+                            continue;
+                        }
                         DB::table('multiple_choice_options')->insert([
                             'question_id' => $question->id,
                             'option_label' => $option['option_label'] ?? 'A',
                             'option_text' => $option['option_text'],
-                            'is_correct' => isset($option['is_correct']) ? (bool)$option['is_correct'] : false,
+                            'is_correct' => isset($option['is_correct']) ? (bool) $option['is_correct'] : false,
                         ]);
                     }
                 }
@@ -225,9 +270,13 @@ class QuizAdminController extends Controller
                 $orderArr = explode(',', $request->input('correct_order', ''));
 
                 foreach ($words as $index => $word) {
-                    if (empty(trim($word))) continue;
-                    $correctOrderIndex = array_search((string)$index, array_map('trim', $orderArr));
-                    if ($correctOrderIndex === false) $correctOrderIndex = $index;
+                    if (empty(trim($word))) {
+                        continue;
+                    }
+                    $correctOrderIndex = array_search((string) $index, array_map('trim', $orderArr));
+                    if ($correctOrderIndex === false) {
+                        $correctOrderIndex = $index;
+                    }
 
                     DB::table('sentence_arrangement_words')->insert([
                         'question_id' => $question->id,
@@ -263,3 +312,4 @@ class QuizAdminController extends Controller
             ->with('success', 'Question deleted successfully!');
     }
 }
+

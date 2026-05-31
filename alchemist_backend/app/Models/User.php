@@ -20,6 +20,8 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name',
+        'first_name',
+        'last_name',
         'username',
         'email',
         'password',
@@ -32,6 +34,7 @@ class User extends Authenticatable
         'equipped_avatar_id',
         'selected_rank_id',
         'profile_bg_color',
+        'gender',
     ];
 
     /**
@@ -75,6 +78,7 @@ class User extends Authenticatable
 
     /**
      * Check if streak should be reset (called on login/me)
+     * Streak resets to 0 only if user hasn't studied for 2+ days
      */
     public function checkStreakReset()
     {
@@ -82,61 +86,71 @@ class User extends Authenticatable
 
         $today = now()->startOfDay();
         $lastStudy = \Carbon\Carbon::parse($this->last_study_at)->startOfDay();
+        $daysDiff = $today->diffInDays($lastStudy);
 
-        // If last study was before yesterday, reset streak to 0
-        if ($lastStudy->lessThan($today->copy()->subDay())) {
+        // If more than 1 day has passed since last study, reset streak
+        if ($daysDiff > 1) {
             $this->streak_count = 0;
             $this->save();
         }
     }
 
     /**
-     * Update user streak and grant rewards
+     * Update user streak — grants +1 streak per calendar day of activity.
+     * Streak resets to 0 if user hasn't played for more than 1 day.
      */
     public function updateStreak()
     {
         $today = now()->startOfDay();
-        $lastStudy = $this->last_study_at ? \Carbon\Carbon::parse($this->last_study_at)->startOfDay() : null;
+        $lastStudy = $this->last_study_at 
+            ? $this->last_study_at->startOfDay() 
+            : null;
 
-        if ($lastStudy && $lastStudy->equalTo($today)) {
-            return null; // Already updated today
+        // Already updated today — do nothing
+        if ($lastStudy && $lastStudy->eq($today)) {
+            return null;
         }
 
-        if ($lastStudy && $lastStudy->equalTo($today->copy()->subDay())) {
-            // Studied yesterday, increment streak
-            $this->streak_count++;
+        // Calculate days difference
+        $daysDiff = $lastStudy ? $today->diffInDays($lastStudy) : 999;
+
+        if ($daysDiff === 1) {
+            // Played yesterday → continue streak
+            $this->streak_count = ($this->streak_count ?? 0) + 1;
+        } else if ($daysDiff > 1) {
+            // Missed more than 1 day → reset to 1
+            $this->streak_count = 1;
         } else {
-            // Missed a day or first time
+            // First time (daysDiff = 999) or edge case → set to 1
             $this->streak_count = 1;
         }
 
-        if ($this->streak_count > $this->max_streak) {
+        if ($this->streak_count > ($this->max_streak ?? 0)) {
             $this->max_streak = $this->streak_count;
         }
 
         $this->last_study_at = $today;
-        
-        // Check for Streak Rewards
+
+        // Streak milestone rewards
         $bonusXp = 0;
-        $rewardMessage = "";
+        $rewardMessage = '';
 
         switch ($this->streak_count) {
-            case 3: $bonusXp = 30; $rewardMessage = "Beginner Streak Badge Unlocked! 🔥"; break;
-            case 7: $bonusXp = 70; $rewardMessage = "Week Warrior Badge Unlocked! ⭐"; break;
-            case 14: $bonusXp = 150; $rewardMessage = "Dedicated Badge Unlocked! 💪"; break;
-            case 30: $bonusXp = 300; $rewardMessage = "Monthly Master Title Unlocked! 👑"; break;
-            case 60: $bonusXp = 600; $rewardMessage = "Veteran Status Unlocked! 🏆"; break;
-            case 100: $bonusXp = 1000; $rewardMessage = "Legendary Status Unlocked! ⚡"; break;
-            case 365: $bonusXp = 5000; $rewardMessage = "Immortal Status Unlocked! 🌟"; break;
+            case 3:   $bonusXp = 30;   $rewardMessage = 'Beginner Streak Badge Unlocked! 🔥'; break;
+            case 7:   $bonusXp = 70;   $rewardMessage = 'Week Warrior Badge Unlocked! ⭐'; break;
+            case 14:  $bonusXp = 150;  $rewardMessage = 'Dedicated Badge Unlocked! 💪'; break;
+            case 30:  $bonusXp = 300;  $rewardMessage = 'Monthly Master Title Unlocked! 👑'; break;
+            case 60:  $bonusXp = 600;  $rewardMessage = 'Veteran Status Unlocked! 🏆'; break;
+            case 100: $bonusXp = 1000; $rewardMessage = 'Legendary Status Unlocked! ⚡'; break;
+            case 365: $bonusXp = 5000; $rewardMessage = 'Immortal Status Unlocked! 🌟'; break;
         }
 
         if ($bonusXp > 0) {
-            $this->xp += $bonusXp;
-            // Log bonus XP
+            $this->xp = ($this->xp ?? 0) + $bonusXp;
             \Illuminate\Support\Facades\DB::table('xp_transactions')->insert([
-                'user_id' => $this->id,
-                'source_type' => 'streak_bonus',
-                'xp_amount' => $bonusXp,
+                'user_id'    => $this->id,
+                'source_type'=> 'streak_bonus',
+                'xp_amount'  => $bonusXp,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -144,13 +158,12 @@ class User extends Authenticatable
 
         $this->save();
 
-        // Auto-unlock avatars based on streak/xp
         $this->checkAvatarUnlocks();
 
         return [
-            'streak' => $this->streak_count,
+            'streak'   => $this->streak_count,
             'bonus_xp' => $bonusXp,
-            'message' => $rewardMessage
+            'message'  => $rewardMessage,
         ];
     }
 
@@ -172,3 +185,4 @@ class User extends Authenticatable
         }
     }
 }
+

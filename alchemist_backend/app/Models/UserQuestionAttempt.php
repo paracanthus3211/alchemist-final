@@ -24,3 +24,4 @@ class UserQuestionAttempt extends Model
         'attempted_at' => 'datetime',
     ];
 }
+

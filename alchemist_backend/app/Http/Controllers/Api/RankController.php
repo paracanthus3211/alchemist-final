@@ -74,7 +74,7 @@ class RankController extends Controller
 
             $u->rank_title = $userRank ? $userRank->name : 'Unranked';
             $u->rank_icon_url = $userRank ? $userRank->icon_url : null;
-            $u->avatar_url = $u->equippedAvatar ? $u->equippedAvatar->image_url : ($u->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $u->username);
+            $u->avatar_url = $u->equippedAvatar ? $u->equippedAvatar->image_url : ($u->avatar_url ?: '/images/chapter.png');
             
             return $u;
         });
@@ -119,3 +119,6 @@ class RankController extends Controller
         return response()->json(['success' => true]);
     }
 }
+
+
+

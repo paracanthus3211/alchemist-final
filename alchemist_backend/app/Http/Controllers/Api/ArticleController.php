@@ -221,3 +221,4 @@ class ArticleController extends Controller
         return response()->file($fullPath);
     }
 }
+

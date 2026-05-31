@@ -7,16 +7,22 @@ use App\Http\Controllers\Api\ArticleController;
 use App\Http\Controllers\Api\RankController;
 use App\Http\Controllers\Api\FriendController;
 use App\Http\Controllers\Api\AvatarController;
+use App\Http\Controllers\PeriodicArticleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
 Route::get('/curriculum', [CurriculumController::class, 'index']);
 Route::get('/ranks', [RankController::class, 'index']);
 
 Route::get('/articles', [ArticleController::class, 'index']);
 Route::get('/articles/{id}', [ArticleController::class, 'show']);
 Route::get('/images/{path}', [ArticleController::class, 'serveImage'])->where('path', '.*');
+
+// Periodic Articles (Public)
+Route::get('/periodic-articles', [PeriodicArticleController::class, 'index']);
+Route::get('/periodic-articles/{elementNumber}', [PeriodicArticleController::class, 'show']);
 
 Route::get('/ping', function () {
     return response()->json(['status' => 'success', 'message' => 'API is reachable']);
@@ -39,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::post('/user/xp', [AuthController::class, 'addXp']);
     Route::post('/user/lab-xp', [AuthController::class, 'addLabXp']);
+    Route::post('/user/lab-reaction', [AuthController::class, 'recordLabReaction']);
     Route::post('/user/select-rank', [AuthController::class, 'selectRank']);
     Route::put('/user/profile-bg', [AuthController::class, 'updateProfileBg']);
 
@@ -98,4 +105,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Image Upload
     Route::post('/upload-image', [ArticleController::class, 'uploadImage']);
+
+    // Periodic Articles (Admin Only)
+    Route::post('/periodic-articles', [PeriodicArticleController::class, 'store']);
+    Route::delete('/periodic-articles/{elementNumber}', [PeriodicArticleController::class, 'destroy']);
 });

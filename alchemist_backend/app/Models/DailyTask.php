@@ -28,3 +28,4 @@ class DailyTask extends Model
         return $this->hasMany(UserDailyProgress::class, 'task_id');
     }
 }
+

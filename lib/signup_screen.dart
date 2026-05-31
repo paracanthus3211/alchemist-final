@@ -1,13 +1,140 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'widgets/background_wrapper.dart';
 import 'widgets/custom_text_field.dart';
-import 'widgets/social_button.dart';
 import 'widgets/custom_back_button.dart';
-import 'birth_gender_screen.dart';
+import 'home_screen.dart';
 import 'login_screen.dart';
 
-class SignupScreen extends StatelessWidget {
+class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
+
+  @override
+  State<SignupScreen> createState() => _SignupScreenState();
+}
+
+class _SignupScreenState extends State<SignupScreen> {
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _passwordConfirmController = TextEditingController();
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _passwordConfirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _register() async {
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+    final passwordConfirm = _passwordConfirmController.text;
+
+    // Validation
+    if (firstName.isEmpty || lastName.isEmpty || username.isEmpty || password.isEmpty || passwordConfirm.isEmpty) {
+      setState(() {
+        _errorMessage = 'Semua field harus diisi';
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      setState(() {
+        _errorMessage = 'Password minimal 6 karakter';
+      });
+      return;
+    }
+
+    if (password != passwordConfirm) {
+      setState(() {
+        _errorMessage = 'Password tidak cocok';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8000/api/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'first_name': firstName,
+          'last_name': lastName,
+          'username': username,
+          'password': password,
+          'password_confirmation': passwordConfirm,
+        }),
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Request timeout. Coba lagi.');
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 201 && data['status'] == 'success') {
+        // Save token and navigate to home
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
+      } else {
+        // Handle validation errors
+        String errorMsg = 'Registrasi gagal';
+        if (data['errors'] != null) {
+          final errors = data['errors'] as Map<String, dynamic>;
+          if (errors['username'] != null) {
+            errorMsg = 'Username sudah digunakan';
+          } else {
+            errorMsg = errors.values.first[0];
+          }
+        } else if (data['message'] != null) {
+          errorMsg = data['message'];
+        }
+        
+        setState(() {
+          _errorMessage = errorMsg;
+        });
+      }
+    } on http.ClientException catch (e) {
+      setState(() {
+        _errorMessage = 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.';
+      });
+    } on FormatException catch (e) {
+      setState(() {
+        _errorMessage = 'Response server tidak valid. Coba lagi.';
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().contains('timeout') 
+            ? 'Request timeout. Coba lagi.' 
+            : 'Terjadi kesalahan. Coba lagi.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,33 +156,16 @@ class SignupScreen extends StatelessWidget {
                     color: Colors.white,
                   ),
                   children: [
-                    TextSpan(text: 'Create Your '),
+                    TextSpan(text: 'Welcome '),
                     TextSpan(
-                      text: 'Account',
+                      text: 'To Alchemist',
                       style: TextStyle(color: Color(0xFF00E5FF)),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 32),
-            
-            SocialButton(
-              text: 'CONTINUE WITH FACEBOOK',
-              backgroundColor: const Color(0xFF1877F2),
-              textColor: Colors.white,
-              icon: const Icon(Icons.facebook, color: Colors.white, size: 24),
-              onPressed: () {},
-            ),
-            SocialButton(
-              text: 'CONTINUE WITH GOOGLE',
-              backgroundColor: Colors.white,
-              textColor: Colors.black,
-              icon: _googleIcon(),
-              onPressed: () {},
-            ),
-            
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
             
             Center(
               child: Text(
@@ -116,22 +226,84 @@ class SignupScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (_errorMessage != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: Colors.red, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                
+                // First Name and Last Name in Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel('FIRST NAME'),
+                          CustomTextField(
+                            controller: _firstNameController,
+                            hintText: 'John',
+                            prefixIconData: Icons.person_outline,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel('LASTNAME'),
+                          CustomTextField(
+                            controller: _lastNameController,
+                            hintText: 'Doe',
+                            prefixIconData: Icons.person_outline,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
                 _buildLabel('USERNAME'),
-                const CustomTextField(
-                  hintText: 'Nikola Tesla',
+                CustomTextField(
+                  controller: _usernameController,
+                  hintText: 'johndoe',
                   prefixIconData: Icons.person_outline,
                 ),
                 const SizedBox(height: 16),
                 
-                _buildLabel('EMAIL ADDRESS'),
-                const CustomTextField(
-                  hintText: 'scientist@alchemist.io',
-                  prefixIconData: Icons.mail_outline,
+                _buildLabel('PASSWORD'),
+                CustomTextField(
+                  controller: _passwordController,
+                  hintText: '••••••••••',
+                  obscureText: true,
+                  prefixIconData: Icons.lock_outline,
                 ),
                 const SizedBox(height: 16),
                 
-                _buildLabel('PASSWORD'),
-                const CustomTextField(
+                _buildLabel('CONFIRM PASSWORD'),
+                CustomTextField(
+                  controller: _passwordConfirmController,
                   hintText: '••••••••••',
                   obscureText: true,
                   prefixIconData: Icons.lock_outline,
@@ -159,12 +331,7 @@ class SignupScreen extends StatelessWidget {
                     ],
                   ),
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const BirthGenderScreen()),
-                      );
-                    },
+                    onPressed: _isLoading ? null : _register,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
@@ -172,15 +339,39 @@ class SignupScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: const Text(
-                      'REGISTER ACCOUNT',
-                      style: TextStyle(
-                        color: Color(0xFF0B1214),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFF0B1214),
+                                  strokeWidth: 2.5,
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                'MENDAFTAR...',
+                                style: TextStyle(
+                                  color: Color(0xFF0B1214),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ],
+                          )
+                        : const Text(
+                            'REGISTER',
+                            style: TextStyle(
+                              color: Color(0xFF0B1214),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
                   ),
                 ),
                 
@@ -206,7 +397,7 @@ class SignupScreen extends StatelessWidget {
                         child: const Text(
                           'Log In →',
                           style: TextStyle(
-                            color: Color(0xFFCCFF00), // Lime accent
+                            color: Color(0xFFCCFF00),
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                           ),
@@ -234,22 +425,6 @@ class SignupScreen extends StatelessWidget {
           fontWeight: FontWeight.bold,
           letterSpacing: 1.5,
         ),
-      ),
-    );
-  }
-
-  Widget _googleIcon() {
-    return RichText(
-      text: const TextSpan(
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        children: [
-          TextSpan(text: 'G', style: TextStyle(color: Color(0xFF4285F4))), // Google Blue
-          TextSpan(text: 'o', style: TextStyle(color: Color(0xFFEA4335))), // Google Red
-          TextSpan(text: 'o', style: TextStyle(color: Color(0xFFFBBC05))), // Google Yellow
-          TextSpan(text: 'g', style: TextStyle(color: Color(0xFF4285F4))), // Google Blue
-          TextSpan(text: 'l', style: TextStyle(color: Color(0xFF34A853))), // Google Green
-          TextSpan(text: 'e', style: TextStyle(color: Color(0xFFEA4335))), // Google Red
-        ],
       ),
     );
   }

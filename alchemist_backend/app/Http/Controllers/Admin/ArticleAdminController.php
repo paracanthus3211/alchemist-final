@@ -150,3 +150,4 @@ class ArticleAdminController extends Controller
         ], 400);
     }
 }
+

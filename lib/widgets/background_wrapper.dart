@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class BackgroundWrapper extends StatelessWidget {
   final Widget child;
   final bool removeSafeAreaPadding;
+  final bool removeTopSafeArea;
   final bool showGrid;
   final Color? backgroundColor;
 
@@ -10,6 +11,7 @@ class BackgroundWrapper extends StatelessWidget {
     super.key, 
     required this.child,
     this.removeSafeAreaPadding = false,
+    this.removeTopSafeArea = false,
     this.showGrid = false,
     this.backgroundColor,
   });
@@ -78,6 +80,7 @@ class BackgroundWrapper extends StatelessWidget {
           
           // Main content
           SafeArea(
+            top: !removeTopSafeArea,
             child: removeSafeAreaPadding 
               ? child 
               : Padding(

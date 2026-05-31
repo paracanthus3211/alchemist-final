@@ -85,3 +85,4 @@ class AvatarAdminController extends Controller
         return redirect()->route('admin.avatars.index')->with('success', 'Avatar deleted successfully.');
     }
 }
+

@@ -14,14 +14,14 @@ class ProfileController extends Controller
     {
         $user = Auth::user();
 
-        // --- FOLLOWING: people the user has sent a friend request to (user_id = user)
-        $followingCount = DB::table('friends')
-            ->where('user_id', $user->id)
+        // --- FOLLOWING: people the user follows
+        $followingCount = DB::table('follows')
+            ->where('follower_id', $user->id)
             ->count();
 
-        // --- FOLLOWERS: people who have sent a request to this user (friend_id = user)
-        $followersCount = DB::table('friends')
-            ->where('friend_id', $user->id)
+        // --- FOLLOWERS: people who follow this user
+        $followersCount = DB::table('follows')
+            ->where('following_id', $user->id)
             ->count();
 
         // --- FRIENDS: mutual accepted connections
@@ -78,6 +78,118 @@ class ProfileController extends Controller
         ]);
     }
 
+    public function show($id)
+    {
+        $authUser    = Auth::user();
+        $user        = \App\Models\User::with('equippedAvatar')->findOrFail($id);
+
+        // Redirect to own profile page
+        if ($user->id === $authUser->id) {
+            return redirect()->route('profile');
+        }
+
+        // Following/Followers from dedicated follows table
+        $followingCount = DB::table('follows')->where('follower_id', $user->id)->count();
+        $followersCount = DB::table('follows')->where('following_id', $user->id)->count();
+        $friendsCount   = DB::table('friends')
+            ->where('status', 'accepted')
+            ->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)->orWhere('friend_id', $user->id);
+            })->count();
+
+        // Is auth user following this profile?
+        $isFollowing = DB::table('follows')
+            ->where('follower_id', $authUser->id)
+            ->where('following_id', $user->id)
+            ->exists();
+
+        $historyArticleIds = DB::table('user_article_history')
+            ->where('user_id', $user->id)
+            ->orderByDesc('updated_at')
+            ->limit(10)
+            ->pluck('article_id');
+        $historyArticles = Article::whereIn('id', $historyArticleIds)->get();
+
+        $activeLevel = DB::table('user_level_completions')
+            ->join('levels', 'user_level_completions.level_id', '=', 'levels.id')
+            ->join('chapters', 'levels.chapter_id', '=', 'chapters.id')
+            ->where('user_level_completions.user_id', $user->id)
+            ->select('levels.name as level_name', 'levels.order_index', 'chapters.title as chapter_title')
+            ->orderByDesc('user_level_completions.created_at')
+            ->first();
+
+        $allRanks    = Rank::all();
+        $selectedRank = $user->selected_rank_id ? Rank::find($user->selected_rank_id) : null;
+
+        // Friendship status between auth user and this profile
+        $friendship = DB::table('friends')
+            ->where(function ($q) use ($authUser, $user) {
+                $q->where('user_id', $authUser->id)->where('friend_id', $user->id);
+            })
+            ->orWhere(function ($q) use ($authUser, $user) {
+                $q->where('user_id', $user->id)->where('friend_id', $authUser->id);
+            })
+            ->first();
+
+        $friendshipStatus = 'none';
+        if ($friendship) {
+            if ($friendship->status === 'accepted') {
+                $friendshipStatus = 'accepted';
+            } elseif ($friendship->status === 'pending' && $friendship->user_id === $authUser->id) {
+                $friendshipStatus = 'pending'; // auth user sent request
+            } elseif ($friendship->status === 'pending' && $friendship->friend_id === $authUser->id) {
+                $friendshipStatus = 'requested_to_me'; // they sent request to auth user
+            }
+        }
+
+        $formatCount = function ($count) {
+            if ($count >= 1000) {
+                $formatted = number_format($count / 1000, 1);
+                return rtrim(rtrim($formatted, '0'), '.') . 'k';
+            }
+            return $count;
+        };
+
+        return view('profile.show', [
+            'user'             => $user,
+            'authUser'         => $authUser,
+            'followingCount'   => $formatCount($followingCount),
+            'followersCount'   => $formatCount($followersCount),
+            'friendsCount'     => $formatCount($friendsCount),
+            'historyArticles'  => $historyArticles,
+            'allRanks'         => $allRanks,
+            'selectedRank'     => $selectedRank,
+            'activeLevel'      => $activeLevel,
+            'friendshipStatus' => $friendshipStatus,
+            'isFollowing'      => $isFollowing,
+        ]);
+    }
+
+    public function follow($id)
+    {
+        $authUser = Auth::user();
+        if ($authUser->id == $id) {
+            return response()->json(['success' => false, 'message' => 'Cannot follow yourself']);
+        }
+        DB::table('follows')->insertOrIgnore([
+            'follower_id'  => $authUser->id,
+            'following_id' => $id,
+            'created_at'   => now(),
+            'updated_at'   => now(),
+        ]);
+        return response()->json(['success' => true]);
+    }
+
+    public function unfollow($id)
+    {
+        $authUser = Auth::user();
+        DB::table('follows')
+            ->where('follower_id', $authUser->id)
+            ->where('following_id', $id)
+            ->delete();
+        return response()->json(['success' => true]);
+    }
+
     public function avatar()
     {
         $user = Auth::user();
@@ -104,3 +216,4 @@ class ProfileController extends Controller
         return redirect()->route('profile')->with('success', 'Avatar updated successfully.');
     }
 }
+

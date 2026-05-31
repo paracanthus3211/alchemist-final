@@ -239,6 +239,37 @@ class ApiService extends ChangeNotifier {
     }
   }
 
+  /// Award XP for a correct lab reaction ONLY once per reaction key (server-enforced).
+  ///
+  /// Returns server JSON on success:
+  /// { already_completed: bool, xp_added: int, total_xp: int, ... }
+  Future<Map<String, dynamic>?> recordLabReaction(String reactionKey) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/user/lab-reaction'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+        body: json.encode({'reaction_key': reactionKey}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final int newTotal = toInt(data['total_xp']);
+        if (newTotal > 0) {
+          _updateLocalXp(newTotal, streak: data['streak'], maxStreak: data['max_streak']);
+        }
+        return data;
+      }
+      return null;
+    } catch (e) {
+      print('Record Lab Reaction Error: $e');
+      return null;
+    }
+  }
+
   void _updateLocalXp(int newTotal, {int? streak, int? maxStreak}) {
     if (_currentUser != null) {
       _currentUser = AppUser(

@@ -1,0 +1,323 @@
+// Alchemist Database Schema
+// Use this at https://dbdiagram.io/
+
+Table users {
+  id bigint [pk, increment]
+  username varchar [unique, not null]
+  first_name varchar
+  last_name varchar
+  email varchar [unique, not null]
+  password varchar [not null]
+  role varchar [default: 'USER']
+  avatar_url varchar
+  xp integer [default: 0]
+  streak_days integer [default: 0]
+  streak_count integer [default: 0]
+  max_streak integer [default: 0]
+  last_study_at date
+  join_date timestamp
+  gender varchar
+  topic_preference varchar
+  profile_bg_color varchar
+  email_verified_at timestamp
+  remember_token varchar
+  equipped_avatar_id bigint
+  selected_rank_id bigint
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table ranks {
+  id bigint [pk, increment]
+  name varchar [not null]
+  chapter varchar
+  xp_threshold integer [not null]
+  icon_url varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table chapters {
+  id bigint [pk, increment]
+  title varchar [not null]
+  description text
+  order_index integer [default: 0]
+  icon_emoji varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table levels {
+  id bigint [pk, increment]
+  chapter_id bigint [not null]
+  name varchar [not null]
+  description text
+  order_index integer [default: 0]
+  xp_required integer [default: 0]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table questions {
+  id bigint [pk, increment]
+  level_id bigint [not null]
+  question_text text [not null]
+  question_type varchar [not null]
+  xp_reward integer [default: 10]
+  order_index integer [default: 0]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table multiple_choice_options {
+  id bigint [pk, increment]
+  question_id bigint [not null]
+  option_text text [not null]
+  is_correct boolean [default: false]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table sentence_arrangement_words {
+  id bigint [pk, increment]
+  question_id bigint [not null]
+  word varchar [not null]
+  correct_position integer [not null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table lab_practice_configs {
+  id bigint [pk, increment]
+  question_id bigint [not null]
+  correct_formula varchar [not null]
+  hint text
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table daily_tasks {
+  id bigint [pk, increment]
+  task_name varchar [not null]
+  task_type varchar [not null]
+  target_value integer [not null]
+  xp_reward integer [not null]
+  stages json
+  is_active boolean [default: true]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table user_daily_progress {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  task_id bigint [not null]
+  date date [not null]
+  current_progress integer [default: 0]
+  completed_stages json
+  is_completed boolean [default: false]
+  created_at timestamp
+  updated_at timestamp
+  
+  indexes {
+    (user_id, task_id, date) [unique]
+  }
+}
+
+Table articles {
+  id bigint [pk, increment]
+  title varchar [not null]
+  description text
+  category varchar
+  thumbnail_url varchar
+  image_url varchar
+  xp_reward integer [default: 10]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table article_contents {
+  id bigint [pk, increment]
+  article_id bigint [not null]
+  type varchar [not null]
+  content text [not null]
+  order_index integer [default: 0]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table avatars {
+  id bigint [pk, increment]
+  name varchar [not null]
+  image_url varchar [not null]
+  unlock_type varchar [default: 'default']
+  unlock_requirement integer
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table user_avatars {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  avatar_id bigint [not null]
+  unlocked_at timestamp
+  created_at timestamp
+  updated_at timestamp
+  
+  indexes {
+    (user_id, avatar_id) [unique]
+  }
+}
+
+Table friends {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  friend_id bigint [not null]
+  status varchar [default: 'pending']
+  created_at timestamp
+  updated_at timestamp
+  
+  indexes {
+    (user_id, friend_id) [unique]
+  }
+}
+
+Table follows {
+  id bigint [pk, increment]
+  follower_id bigint [not null]
+  following_id bigint [not null]
+  created_at timestamp
+  updated_at timestamp
+  
+  indexes {
+    (follower_id, following_id) [unique]
+  }
+}
+
+Table user_question_attempts {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  question_id bigint [not null]
+  is_correct boolean [default: false]
+  xp_earned integer [default: 0]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table user_level_completions {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  level_id bigint [not null]
+  score integer [default: 0]
+  completion_time_seconds integer [default: 0]
+  wrong_answers_count integer [default: 0]
+  created_at timestamp
+  updated_at timestamp
+  
+  indexes {
+    (user_id, level_id) [unique]
+  }
+}
+
+Table user_article_progress {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  article_id bigint [not null]
+  last_read_at timestamp
+  completed_at timestamp
+  created_at timestamp
+  updated_at timestamp
+  
+  indexes {
+    (user_id, article_id) [unique]
+  }
+}
+
+Table bookmarks {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  article_id bigint [not null]
+  created_at timestamp
+  updated_at timestamp
+  
+  indexes {
+    (user_id, article_id) [unique]
+  }
+}
+
+Table xp_transactions {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  source_type varchar [not null]
+  source_id bigint
+  xp_amount integer [not null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table user_lab_reactions {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  reaction_key varchar [not null]
+  created_at timestamp
+  updated_at timestamp
+  
+  indexes {
+    (user_id, reaction_key) [unique]
+  }
+}
+
+Table periodic_articles {
+  id bigint [pk, increment]
+  element_number integer [unique, not null]
+  element_symbol varchar [not null]
+  element_name varchar [not null]
+  content text [not null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table personal_access_tokens {
+  id bigint [pk, increment]
+  tokenable_type varchar [not null]
+  tokenable_id bigint [not null]
+  name varchar [not null]
+  token varchar [unique, not null]
+  abilities text
+  last_used_at timestamp
+  expires_at timestamp
+  created_at timestamp
+  updated_at timestamp
+  
+  indexes {
+    (tokenable_type, tokenable_id)
+  }
+}
+
+// Relationships
+Ref: users.equipped_avatar_id > avatars.id
+Ref: users.selected_rank_id > ranks.id
+Ref: levels.chapter_id > chapters.id
+Ref: questions.level_id > levels.id
+Ref: multiple_choice_options.question_id > questions.id
+Ref: sentence_arrangement_words.question_id > questions.id
+Ref: lab_practice_configs.question_id > questions.id
+Ref: user_daily_progress.user_id > users.id
+Ref: user_daily_progress.task_id > daily_tasks.id
+Ref: article_contents.article_id > articles.id
+Ref: user_avatars.user_id > users.id
+Ref: user_avatars.avatar_id > avatars.id
+Ref: friends.user_id > users.id
+Ref: friends.friend_id > users.id
+Ref: follows.follower_id > users.id
+Ref: follows.following_id > users.id
+Ref: user_question_attempts.user_id > users.id
+Ref: user_question_attempts.question_id > questions.id
+Ref: user_level_completions.user_id > users.id
+Ref: user_level_completions.level_id > levels.id
+Ref: user_article_progress.user_id > users.id
+Ref: user_article_progress.article_id > articles.id
+Ref: bookmarks.user_id > users.id
+Ref: bookmarks.article_id > articles.id
+Ref: xp_transactions.user_id > users.id
+Ref: user_lab_reactions.user_id > users.id

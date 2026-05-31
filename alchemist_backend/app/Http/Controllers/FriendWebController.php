@@ -33,7 +33,7 @@ class FriendWebController extends Controller
 
             $u->rank_title = $userRank ? $userRank->name : 'Unranked';
             $u->rank_icon_url = $userRank ? $userRank->icon_url : null;
-            $u->avatar_url = $u->equippedAvatar ? $u->equippedAvatar->image_url : ($u->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $u->username);
+            $u->avatar_url = $u->equippedAvatar ? $u->equippedAvatar->image_url : ($u->avatar_url ?: '/images/chapter.png');
 
             // Get Chapter (Based on user_level_completions)
             $activeLevel = DB::table('user_level_completions')
@@ -118,15 +118,58 @@ class FriendWebController extends Controller
     {
         $user = Auth::user();
 
-        $requesterIds = DB::table('friends')
+        // Get all pending requests sent TO the current user
+        $pendingRows = DB::table('friends')
             ->where('friend_id', $user->id)
             ->where('status', 'pending')
-            ->pluck('user_id');
+            ->get();
 
-        $requests = User::with('equippedAvatar')->whereIn('id', $requesterIds)->get();
-        $requests = $this->attachUserData($requests, $user);
+        if ($pendingRows->isEmpty()) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
 
-        return response()->json(['success' => true, 'data' => $requests]);
+        $requesterIds = $pendingRows->pluck('user_id');
+        $requesters   = User::with('equippedAvatar')->whereIn('id', $requesterIds)->get();
+
+        $ranks = \App\Models\Rank::orderByDesc('xp_threshold')->get();
+
+        $result = $requesters->map(function ($u) use ($pendingRows, $ranks) {
+            $row = $pendingRows->firstWhere('user_id', $u->id);
+
+            $userXp   = (int) $u->xp;
+            $userRank = null;
+            if ($u->selected_rank_id) {
+                $userRank = $ranks->firstWhere('id', $u->selected_rank_id);
+            }
+            if (! $userRank) {
+                $userRank = $ranks->firstWhere('xp_threshold', '<=', $userXp);
+            }
+
+            $activeLevel = DB::table('user_level_completions')
+                ->join('levels', 'user_level_completions.level_id', '=', 'levels.id')
+                ->join('chapters', 'levels.chapter_id', '=', 'chapters.id')
+                ->where('user_level_completions.user_id', $u->id)
+                ->select('chapters.title as chapter_title')
+                ->orderByDesc('user_level_completions.created_at')
+                ->first();
+
+            return [
+                'id'               => $u->id,
+                'username'         => $u->username,
+                'xp'               => $userXp,
+                'avatar_url'       => $u->equippedAvatar
+                                        ? $u->equippedAvatar->image_url
+                                        : ($u->avatar_url ?: '/images/chapter.png'),
+                'rank_title'       => $userRank ? $userRank->name : 'Unranked',
+                'rank_icon_url'    => $userRank ? $userRank->icon_url : null,
+                'chapter_title'    => $activeLevel ? $activeLevel->chapter_title : 'Chapter 1',
+                'friendship_status'=> 'requested_to_me',
+                'request_id'       => $row->id,
+                'requested_at'     => \Carbon\Carbon::parse($row->created_at)->diffForHumans(),
+            ];
+        });
+
+        return response()->json(['success' => true, 'data' => $result->values()]);
     }
 
     public function sendRequest(Request $request, $friendId)
@@ -177,6 +220,22 @@ class FriendWebController extends Controller
         return response()->json(['success' => (bool)$updated]);
     }
 
+    public function unfriend(Request $request, $friendId)
+    {
+        $user = Auth::user();
+
+        $deleted = DB::table('friends')
+            ->where(function ($q) use ($user, $friendId) {
+                $q->where('user_id', $user->id)->where('friend_id', $friendId);
+            })
+            ->orWhere(function ($q) use ($user, $friendId) {
+                $q->where('user_id', $friendId)->where('friend_id', $user->id);
+            })
+            ->delete();
+
+        return response()->json(['success' => (bool) $deleted]);
+    }
+
     public function ignoreRequest(Request $request, $requesterId)
     {
         $user = Auth::user();
@@ -194,3 +253,4 @@ class FriendWebController extends Controller
         return response()->json(['success' => (bool)$deleted]);
     }
 }
+

@@ -38,3 +38,4 @@ class Question extends Model
         return $this->hasOne(LabPracticeConfig::class);
     }
 }
+

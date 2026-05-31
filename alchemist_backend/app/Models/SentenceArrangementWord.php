@@ -14,3 +14,4 @@ class SentenceArrangementWord extends Model
         return $this->belongsTo(Question::class);
     }
 }
+

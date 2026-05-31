@@ -79,3 +79,4 @@ class RankAdminController extends Controller
         return redirect()->route('admin.ranks.index')->with('success', 'Rank deleted successfully.');
     }
 }
+

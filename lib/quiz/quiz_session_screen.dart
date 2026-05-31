@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../virtual_lab_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/background_wrapper.dart';
-import '../widgets/animated_progress_bar.dart';
-import 'virtual_lab_screen.dart';
 
 class QuizSessionScreen extends StatefulWidget {
   final List<dynamic> questions;
@@ -111,6 +110,8 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
       await ApiService().addUserXp(_correctQuestions.toList());
       await ApiService().saveLevelCompletion(widget.levelId, score, timeSpent, _wrongAnswersCount);
       await ApiService().getCurrentUser();
+      // Add delay to ensure backend has processed the completion and data is ready
+      await Future.delayed(const Duration(milliseconds: 1000));
     }
     
     if (!mounted) return;
@@ -307,11 +308,7 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
     }
 
     if (question['type'] == 'LAB_PRACTICE') {
-      return VirtualLabScreen(
-        questionData: Map<String, dynamic>.from(question),
-        onOptionSelected: (index) => setState(() => _selectedOptionIndex = index),
-        onMixChanged: (correct) => setState(() => _isCorrectMix = correct),
-      );
+      return VirtualLabScreen();
     }
 
     if (question['type'] == 'SENTENCE_ARRANGEMENT') {

@@ -36,6 +36,7 @@
         .header {
             max-width: 680px; width: 100%; margin: 0 auto 32px;
         }
+
         .chapter-label {
             font-size: 14px; font-weight: 700; color: var(--cyan);
             text-transform: lowercase; margin-bottom: 12px;
@@ -255,6 +256,47 @@
             cursor: pointer; align-self: flex-start;
         }
 
+        /* ── COMPLETION SCREEN ── */
+        .completion-screen {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: #0b1c21; z-index: 1000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.5s ease;
+            padding: 20px;
+        }
+        .completion-screen.active {
+            opacity: 1; pointer-events: auto;
+        }
+        .complete-img {
+            width: 250px; height: auto; object-fit: contain; margin-bottom: 30px;
+        }
+        .complete-title {
+            font-size: 36px; font-weight: 700; color: #00d4d4; margin-bottom: 50px;
+        }
+        .complete-stats {
+            display: flex; gap: 40px; text-align: center; justify-content: center; width: 100%; max-width: 600px;
+            flex-wrap: wrap;
+        }
+        .complete-stat-item {
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .complete-icon {
+            width: 80px; height: 80px; margin-bottom: 16px; object-fit: contain;
+        }
+        .complete-label {
+            font-size: 14px; font-weight: 700; margin-bottom: 8px;
+        }
+        .complete-value {
+            font-size: 18px; font-weight: 700; color: #b8f400;
+        }
+        .btn-continue-complete {
+            margin-top: 60px;
+            background: #b8f400; color: #000; font-size: 18px; font-weight: 700;
+            padding: 16px 48px; border-radius: 12px; border: none; cursor: pointer;
+            box-shadow: 0 6px 0 #7fa600; text-transform: uppercase;
+        }
+        .btn-continue-complete:active { transform: translateY(6px); box-shadow: none; }
+
     </style>
 </head>
 <body>
@@ -293,6 +335,38 @@
         <button class="btn-exp-back" onclick="closeExplanation()">Back to Quiz</button>
     </div>
 
+
+    <!-- COMPLETION SCREEN -->
+    <div class="completion-screen" id="completion-screen">
+        <img src="/images/level_complete.png" alt="Level Complete" class="complete-img">
+        <div class="complete-title">Level Complete!</div>
+        
+        <div class="complete-stats">
+            <div class="complete-stat-item">
+                <img src="/images/score.png" alt="Score" class="complete-icon">
+                <div class="complete-label" style="color: #d896ff;">Final Score</div>
+                <div class="complete-value" id="comp-score">100%</div>
+            </div>
+            <div class="complete-stat-item">
+                <img src="/images/xp.png" alt="XP" class="complete-icon">
+                <div class="complete-label" style="color: #00d4d4;">XP</div>
+                <div class="complete-value" id="comp-xp">+ 50</div>
+            </div>
+            <div class="complete-stat-item">
+                <img src="/images/duration.png" alt="Duration" class="complete-icon">
+                <div class="complete-label" style="color: #d896ff;">Duration</div>
+                <div class="complete-value" id="comp-duration">0:00</div>
+            </div>
+            <div class="complete-stat-item">
+                <img src="/images/errors.png" alt="Errors" class="complete-icon">
+                <div class="complete-label" style="color: #ff4646;">Wrong answer</div>
+                <div class="complete-value" id="comp-errors">0</div>
+            </div>
+        </div>
+
+        <button class="btn-continue-complete" id="btn-comp-continue">Continue</button>
+    </div>
+
 </div>
 
 <script>
@@ -300,6 +374,8 @@
     let currentQuestionIndex = 0;
     
     let wrongAnswersCount = 0;
+    let correctAnswersCount = 0;
+    let totalXpEarned = 0;
     let startTime = Date.now();
     
     let labSelectedA = null;
@@ -661,6 +737,8 @@
         document.getElementById('btn-continue').innerText = 'Continue';
 
         if (isCorrect) {
+            correctAnswersCount++;
+            totalXpEarned += questions[currentQuestionIndex].xp_reward || 0;
             bottomBar.classList.add('correct');
             status.innerHTML = `
                 <svg viewBox="0 0 24 24" style="fill: #000;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
@@ -707,12 +785,7 @@
 
     function completeQuiz() {
         const totalSeconds = Math.round((Date.now() - startTime) / 1000);
-        const score = Math.max(0, 100 - (wrongAnswersCount * 20));
-
-        let totalXpReward = 0;
-        questions.forEach(q => {
-            totalXpReward += q.xp_reward;
-        });
+        const score = questions.length > 0 ? Math.round((correctAnswersCount / questions.length) * 100) : 0;
 
         fetch(`/quiz/play/{{ $level->id }}/complete`, {
             method: 'POST',
@@ -724,18 +797,29 @@
                 score: score,
                 completion_time_seconds: totalSeconds,
                 wrong_answers_count: wrongAnswersCount,
-                xp_earned: totalXpReward
+                xp_earned: totalXpEarned
             })
         })
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                if (data.xp_earned > 0) {
-                    alert(`Level completed! You earned ${data.xp_earned} XP!`);
-                } else {
-                    alert(`Level completed! (No XP earned: you already completed this level before).`);
-                }
-                window.location.href = data.redirect;
+                // Populate completion screen stats
+                document.getElementById('comp-score').innerText = score + '%';
+                document.getElementById('comp-xp').innerText = '+ ' + (data.xp_earned || 0);
+                
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = totalSeconds % 60;
+                document.getElementById('comp-duration').innerText = mins + ':' + (secs < 10 ? '0' : '') + secs;
+                
+                document.getElementById('comp-errors').innerText = wrongAnswersCount;
+
+                // Set up continue button
+                document.getElementById('btn-comp-continue').onclick = function() {
+                    window.location.href = data.redirect;
+                };
+
+                // Show screen
+                document.getElementById('completion-screen').classList.add('active');
             }
         })
         .catch(err => {

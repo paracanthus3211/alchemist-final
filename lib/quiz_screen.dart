@@ -26,6 +26,7 @@ class _QuizScreenState extends State<QuizScreen> {
   int? _activeLevelId;
   int _visibleChapterIndex = 0;
   List<double> _chapterOffsets = [];
+  List<GlobalKey> _chapterKeys = [];
 
   @override
   void initState() {
@@ -34,14 +35,12 @@ class _QuizScreenState extends State<QuizScreen> {
     _fetchCurriculum();
   }
 
-
-
   void _onScroll() {
     if (_chapterOffsets.isEmpty) return;
-    double offset = _scrollController.offset;
+    final columnOffset = _scrollController.offset - 212;
     int newIndex = 0;
     for (int i = 0; i < _chapterOffsets.length; i++) {
-      if (offset >= _chapterOffsets[i] - 100) { 
+      if (columnOffset >= _chapterOffsets[i] - 50) {
         newIndex = i;
       }
     }
@@ -55,11 +54,18 @@ class _QuizScreenState extends State<QuizScreen> {
   void _calculateOffsets() {
     _chapterOffsets.clear();
     double currentOffset = 0.0;
-    for (var ch in _chapters) {
+    for (int i = 0; i < _chapters.length; i++) {
       _chapterOffsets.add(currentOffset);
-      final levels = (ch['levels'] as List?) ?? [];
-      final chapterHeight = 74.0 + (levels.length * 170.0);
-      currentOffset += chapterHeight;
+      final renderBox = i < _chapterKeys.length
+          ? _chapterKeys[i].currentContext?.findRenderObject() as RenderBox?
+          : null;
+      if (renderBox != null && renderBox.hasSize) {
+        currentOffset += renderBox.size.height;
+      } else {
+        final ch = _chapters[i];
+        final levels = (ch['levels'] as List?) ?? [];
+        currentOffset += 72.0 + (levels.length * 198.0);
+      }
     }
   }
 
@@ -69,10 +75,46 @@ class _QuizScreenState extends State<QuizScreen> {
       setState(() {
         _chapters = chapters;
         _isLoading = false;
+        _chapterKeys = List.generate(chapters.length, (_) => GlobalKey());
         _calculateOffsets();
         final activeIndex = _chapters.indexWhere((ch) => ApiService.toInt(ch['chapter_progress']) < 100);
         _visibleChapterIndex = activeIndex >= 0 ? activeIndex : (_chapters.isNotEmpty ? _chapters.length - 1 : 0);
       });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _calculateOffsets();
+        }
+      });
+    }
+  }
+
+  Future<void> _forceRefreshCurriculum() async {
+    // Force refresh with retry logic to ensure data is updated
+    setState(() => _isLoading = true);
+    
+    for (int i = 0; i < 3; i++) {
+      final chapters = await ApiService().getCurriculum();
+      if (mounted) {
+        setState(() {
+          _chapters = chapters;
+          _isLoading = false;
+          _chapterKeys = List.generate(chapters.length, (_) => GlobalKey());
+          _calculateOffsets();
+          final activeIndex = _chapters.indexWhere((ch) => ApiService.toInt(ch['chapter_progress']) < 100);
+          _visibleChapterIndex = activeIndex >= 0 ? activeIndex : (_chapters.isNotEmpty ? _chapters.length - 1 : 0);
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _calculateOffsets();
+          }
+        });
+      }
+      
+      // If we got data, break the retry loop
+      if (chapters.isNotEmpty) break;
+      
+      // Wait before retrying
+      await Future.delayed(const Duration(milliseconds: 500));
     }
   }
 
@@ -239,6 +281,7 @@ class _QuizScreenState extends State<QuizScreen> {
       body: BackgroundWrapper(
         showGrid: true,
         removeSafeAreaPadding: true,
+        removeTopSafeArea: true,
         child: _isLoading 
           ? const Center(child: CircularProgressIndicator(color: primaryCyan))
           : CustomScrollView(
@@ -249,12 +292,12 @@ class _QuizScreenState extends State<QuizScreen> {
                 SliverPersistentHeader(
                   pinned: true,
                   delegate: _StickyHeaderDelegate(
-                    height: 235,
+                    height: 280,
                     child: Column(
                       children: [
                         // --- PROFILE ROW ---
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                          padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
                           child: Row(
                             children: [
                               Text(
@@ -267,32 +310,6 @@ class _QuizScreenState extends State<QuizScreen> {
                                 ),
                               ),
                               const Spacer(),
-                              // Streak
-                              Row(
-                                children: [
-                                  Image.asset('assets/streak.png', width: 20, height: 20),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${user?.streakCount ?? 0} DAY STREAK',
-                                    style: GoogleFonts.spaceGrotesk(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: 16),
-                              // XP
-                              Row(
-                                children: [
-                                  Image.asset('assets/xp.png', width: 20, height: 20),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${user?.totalXp ?? 0}',
-                                    style: GoogleFonts.spaceGrotesk(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: 16),
-                              // Avatar
-                              // Avatar
                               CircleAvatar(
                                 radius: 20,
                                 backgroundColor: _parseColor(user?.profileBgColor) ?? Colors.transparent,
@@ -301,90 +318,108 @@ class _QuizScreenState extends State<QuizScreen> {
                             ],
                           ),
                         ),
-                        
-                        // --- CHAPTER DATA DISPLAY (DYNAMIC TINTED STYLING) ---
+
+                        // --- BANNER + STREAK/XP row ---
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: Color.lerp(chapterColor, Colors.black, 0.82) ?? const Color(0xFF0F1B1D),
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(20),
-                                topRight: Radius.circular(20),
-                                bottomLeft: Radius.circular(8),
-                                bottomRight: Radius.circular(8),
-                              ),
-                              border: Border.all(color: Colors.white.withOpacity(0.03)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Color.lerp(chapterColor, Colors.black, 0.90) ?? const Color(0xFF071011),
-                                  offset: const Offset(0, 6),
-                                  blurRadius: 0,
-                                  spreadRadius: 0,
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Chapter ${_getDisplayedChapter()?['order_index'] ?? 1} - ${displayedChapter?['title'] ?? ''}',
-                                  style: GoogleFonts.spaceGrotesk(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w400,
+                          padding: const EdgeInsets.fromLTRB(24, 8, 24, 6),
+                          child: Column(
+                            children: [
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Color.lerp(chapterColor, Colors.black, 0.60) ?? const Color(0xFF0F1B1D),
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(20),
+                                    topRight: Radius.circular(20),
+                                    bottomLeft: Radius.circular(8),
+                                    bottomRight: Radius.circular(8),
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      _getDisplayedLevelDisplayName(),
-                                      style: GoogleFonts.spaceGrotesk(
-                                        color: Colors.white.withOpacity(0.7),
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${_getDisplayedChapter()?['chapter_progress'] ?? 0} %',
-                                      style: GoogleFonts.spaceGrotesk(
-                                        color: chapterColor,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                  border: Border.all(color: Colors.white.withOpacity(0.03)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Color.lerp(chapterColor, Colors.black, 0.70) ?? const Color(0xFF071011),
+                                      offset: const Offset(0, 6),
+                                      blurRadius: 0,
+                                      spreadRadius: 0,
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                // Progress Bar
-                                AnimatedProgressBar(
-                                  value: ((_getDisplayedChapter()?['chapter_progress'] ?? 0) / 100).clamp(0.0, 1.0),
-                                  height: 7,
-                                  backgroundColor: Colors.white.withOpacity(0.2),
-                                  foregroundGradient: LinearGradient(colors: [chapterColor, chapterColor]),
-                                  boxShadow: [BoxShadow(color: chapterColor.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2))],
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.bolt, color: chapterColor, size: 20),
-                                    const SizedBox(width: 4),
                                     Text(
-                                      '${_getChapterEarnedXp()}/${_getChapterTotalXp()} XP',
+                                      'Chapter ${_getDisplayedChapter()?['order_index'] ?? 1} - ${displayedChapter?['title'] ?? ''}',
                                       style: GoogleFonts.spaceGrotesk(
-                                        color: Colors.white70,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w400,
                                       ),
+                                    ),
+                                    const SizedBox(height: 1),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            _getDisplayedLevelDisplayName(),
+                                            style: GoogleFonts.spaceGrotesk(
+                                              color: Colors.white.withOpacity(0.7),
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '${_getDisplayedChapter()?['chapter_progress'] ?? 0} %',
+                                          style: GoogleFonts.spaceGrotesk(
+                                            color: chapterColor,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    AnimatedProgressBar(
+                                      value: ((_getDisplayedChapter()?['chapter_progress'] ?? 0) / 100).clamp(0.0, 1.0),
+                                      height: 7,
+                                      backgroundColor: Colors.white.withOpacity(0.2),
+                                      foregroundGradient: LinearGradient(colors: [chapterColor, chapterColor]),
+                                      boxShadow: [BoxShadow(color: chapterColor.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2))],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.bolt, color: chapterColor, size: 20),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${_getChapterEarnedXp()}/${_getChapterTotalXp()} XP',
+                                          style: GoogleFonts.spaceGrotesk(
+                                            color: Colors.white70,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              // Streak & XP row — below the banner, always visible
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  _smallStat('assets/streak.png', '${user?.streakCount ?? 0} streak'),
+                                  const SizedBox(width: 20),
+                                  _smallStat('assets/xp.png', '${user?.totalXp ?? 0} XP'),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -408,6 +443,7 @@ class _QuizScreenState extends State<QuizScreen> {
                           } catch (_) {}
                         }
                         return Column(
+                          key: _chapterKeys.length > chapterIndex ? _chapterKeys[chapterIndex] : null,
                           children: [
                             const SizedBox(height: 10),
                             // CHAPTER DIVIDER
@@ -439,20 +475,22 @@ class _QuizScreenState extends State<QuizScreen> {
                                     children: List.generate(levels.length, (index) {
                                       final lvl = levels[index];
                                       final isLeft = index % 2 == 0;
-                                      final isDone = ApiService.toInt(lvl['progress']) >= 100;
+                                      final isDone = lvl['is_completed'] == true || ApiService.toInt(lvl['progress']) >= 100;
                                       final isActive = ApiService.toInt(lvl['progress']) > 0 && ApiService.toInt(lvl['progress']) < 100;
                                       final isChapterLocked = chapter['is_locked'] == true;
                                       
                                       bool isPrevDone = true;
                                       if (index > 0) {
                                         final prevLvl = levels[index - 1];
-                                        isPrevDone = ApiService.toInt(prevLvl['progress']) >= 100;
+                                        // Use is_completed field which is more reliable than progress
+                                        isPrevDone = prevLvl['is_completed'] == true || ApiService.toInt(prevLvl['progress']) >= 100;
                                       } else if (chapterIndex > 0) {
                                         final prevChapter = _chapters[chapterIndex - 1];
                                         final prevChapterLevels = (prevChapter['levels'] as List?) ?? [];
                                         if (prevChapterLevels.isNotEmpty) {
                                           final prevLvl = prevChapterLevels.last;
-                                          isPrevDone = ApiService.toInt(prevLvl['progress']) >= 100;
+                                          // Use is_completed field which is more reliable than progress
+                                          isPrevDone = prevLvl['is_completed'] == true || ApiService.toInt(prevLvl['progress']) >= 100;
                                         }
                                       }
                                       
@@ -474,7 +512,22 @@ class _QuizScreenState extends State<QuizScreen> {
                                               curve: Curves.easeInOut,
                                               alignment: 0.3,
                                             );
-                                            _showLevelPopup(context, lvl, chapter['title'] ?? 'Chapter', levels.length, isLevelLocked, isPrevDone, nodeColor, chapter['is_locked'] == true, isLeft);
+                                            final int xpThreshold = ApiService.toInt(lvl['xp_threshold'] ?? lvl['xp_required']);
+                                            final int userXp = ApiService().currentUser?.totalXp ?? 0;
+                                            final bool isUnlocked = !isChapterLocked && isPrevDone && (xpThreshold <= 0 || userXp >= xpThreshold);
+                                            _showLevelPopup(
+                                              context,
+                                              lvl,
+                                              chapter['title'] ?? 'Chapter',
+                                              ApiService.toInt(chapter['order_index'] ?? (chapterIndex + 1)),
+                                              levels.length,
+                                              isUnlocked,
+                                              isPrevDone,
+                                              xpThreshold,
+                                              userXp,
+                                              nodeColor,
+                                              isLeft,
+                                            );
                                           },
                                           builder: (isPressed) => _hexNodeWithLabel(
                                             lvl['name']?.toUpperCase() ?? 'UNTITLED', 
@@ -653,7 +706,19 @@ class _QuizScreenState extends State<QuizScreen> {
       ),
     );
   }
-  void _showLevelPopup(BuildContext context, dynamic lvl, String chapterTitle, int totalLevels, bool isLevelLocked, bool isPrevDone, Color themeColor, bool isChapterLocked, bool isLeft) {
+  void _showLevelPopup(
+    BuildContext context,
+    dynamic lvl,
+    String chapterTitle,
+    int chapterNumber,
+    int totalLevels,
+    bool isUnlocked,
+    bool isPrevDone,
+    int xpThreshold,
+    int userXp,
+    Color themeColor,
+    bool isLeft,
+  ) {
     _hideLevelPopup();
 
     setState(() {
@@ -677,9 +742,6 @@ class _QuizScreenState extends State<QuizScreen> {
         followerOffsetX = 120.0 - popupWidth;
         triangleX = 50.0 - followerOffsetX;
       }
-
-      final int xpThreshold = (lvl['xp_threshold'] ?? lvl['xp_required'] ?? 0) as int;
-      final int userXp = ApiService().currentUser?.totalXp ?? 0;
       
       _overlayEntry = OverlayEntry(
         builder: (context) => Stack(
@@ -697,17 +759,18 @@ class _QuizScreenState extends State<QuizScreen> {
                 color: Colors.transparent,
                 child: LevelInfoPopup(
                       chapterTitle: chapterTitle,
+                      chapterNumber: chapterNumber,
                       levelName: lvl['name'] ?? 'Untitled',
-                      orderIndex: ApiService.toInt(lvl['order_index'] ?? 1),
+                      levelIndex: ApiService.toInt(lvl['order_index'] ?? 1),
                       totalLevelsInChapter: totalLevels,
-                      isLocked: isLevelLocked,
+                      isLocked: !isUnlocked,
                       xpThreshold: xpThreshold,
                       userXp: userXp,
                       isPrevDone: isPrevDone,
                       popupWidth: popupWidth,
                       triangleX: triangleX,
                       themeColor: themeColor,
-                      onStart: isLevelLocked ? null : () {
+                      onStart: isUnlocked ? () {
                     _hideLevelPopup();
                     Navigator.push(
                       context,
@@ -744,8 +807,8 @@ class _QuizScreenState extends State<QuizScreen> {
                         },
                         transitionDuration: const Duration(milliseconds: 600),
                       ),
-                    ).then((_) => _fetchCurriculum());
-                  },
+                    ).then((_) => _forceRefreshCurriculum());
+                  } : null,
                 ),
               ),
             ),
@@ -778,8 +841,9 @@ class _QuizScreenState extends State<QuizScreen> {
 
 class LevelInfoPopup extends StatefulWidget {
   final String chapterTitle;
+  final int chapterNumber;
   final String levelName;
-  final int orderIndex;
+  final int levelIndex;
   final int totalLevelsInChapter;
   final double popupWidth;
   final double triangleX;
@@ -790,11 +854,15 @@ class LevelInfoPopup extends StatefulWidget {
   final bool isPrevDone;
   final Color themeColor;
 
+  static const Color _lockedBg = Color(0xFF4A5244);
+  static const Color _creamText = Color(0xFFF5F0D0);
+
   const LevelInfoPopup({
     super.key,
     required this.chapterTitle,
+    required this.chapterNumber,
     required this.levelName,
-    required this.orderIndex,
+    required this.levelIndex,
     required this.totalLevelsInChapter,
     required this.popupWidth,
     required this.triangleX,
@@ -840,187 +908,123 @@ class _LevelInfoPopupState extends State<LevelInfoPopup> with SingleTickerProvid
     super.dispose();
   }
 
+  @override
   Widget build(BuildContext context) {
-    final tealColor = widget.themeColor;
-    // Use gray color for banner when level is locked
-    final bannerColor = widget.isLocked ? const Color(0xFF757575) : tealColor;
+    final bannerColor = widget.isLocked ? LevelInfoPopup._lockedBg : widget.themeColor;
+    final bool needsXp = widget.xpThreshold > 0 && widget.userXp < widget.xpThreshold;
+    final bool needsPrev = !widget.isPrevDone;
     
     return FadeTransition(
       opacity: _fadeAnim,
       child: ScaleTransition(
         scale: _scaleAnim,
         child: SizedBox(
-          width: widget.popupWidth,
+          width: widget.popupWidth * 0.85, // Kecilkan ukuran popup
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Triangular Pointer pointing UP (Dynamic position)
               Padding(
-                padding: EdgeInsets.only(left: widget.triangleX - 15), // -15 for half width of triangle
+                padding: EdgeInsets.only(left: widget.triangleX - 15),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: CustomPaint(
-                    size: const Size(30, 25),
+                    size: const Size(24, 20), // Kecilkan triangle
                     painter: TrianglePainter(color: bannerColor, pointingUp: true),
                   ),
                 ),
               ),
-              // Bubble Content
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14), // Kecilkan padding
             decoration: BoxDecoration(
               color: bannerColor,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(16), // Kecilkan border radius
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'CHAPTER ${widget.orderIndex} ${widget.chapterTitle.toUpperCase()}',
+                  'Chapter ${widget.chapterNumber}, ${widget.chapterTitle}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.0,
+                    color: LevelInfoPopup._creamText,
+                    fontSize: 14, // Kecilkan font size
+                    fontWeight: FontWeight.w600,
                     decoration: TextDecoration.none,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2), // Kecilkan spacing
                 Text(
-                  '${widget.orderIndex} OUT OF ${widget.totalLevelsInChapter} LEVEL',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8,
+                  '${widget.levelIndex} out of ${widget.totalLevelsInChapter} level',
+                  style: TextStyle(
+                    color: LevelInfoPopup._creamText.withOpacity(0.85),
+                    fontSize: 11, // Kecilkan font size
                     fontWeight: FontWeight.w500,
-                    letterSpacing: 0.5,
                     decoration: TextDecoration.none,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6), // Kecilkan spacing
                 Text(
-                  widget.levelName.toUpperCase(),
+                  widget.levelName,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.0,
+                    color: LevelInfoPopup._creamText,
+                    fontSize: 32, // Kecilkan dari 56 ke 32
+                    fontWeight: FontWeight.w700,
+                    height: 1,
                     decoration: TextDecoration.none,
                   ),
                 ),
-                if (widget.isLocked) ...[
-                  const SizedBox(height: 8),
-                  Builder(
-                    builder: (context) {
-                      final bool needsXp = widget.xpThreshold > 0 && widget.userXp < widget.xpThreshold;
-                      final bool needsPrev = !widget.isPrevDone;
-                      
-                      if (needsXp && needsPrev) {
-                        return Column(
-                          children: [
-                            Text(
-                              'REACH ${widget.xpThreshold} XP TO OPEN THIS LEVEL &',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'UNLOCK PREVIOUS LEVEL',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
-                            ),
-                          ],
-                        );
-                      } else if (needsXp) {
-                        return Text(
-                          'REACH ${widget.xpThreshold} XP TO OPEN THIS LEVEL',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
-                        );
-                      } else if (needsPrev) {
-                        return const Text(
-                          'UNLOCK PREVIOUS LEVEL',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
-                        );
-                      } else {
-                        return const Text(
-                          'LEVEL LOCKED',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
-                        );
-                      }
-                    },
-                  ),
+                if (widget.isLocked && (needsXp || needsPrev)) ...[
+                  const SizedBox(height: 6), // Kecilkan spacing
+                  if (needsXp)
+                    Text(
+                      'Reach ${widget.xpThreshold} XP',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: LevelInfoPopup._creamText, fontSize: 12, fontWeight: FontWeight.w500, decoration: TextDecoration.none), // Kecilkan font
+                    ),
+                  if (needsXp && needsPrev) const SizedBox(height: 3), // Kecilkan spacing
+                  if (needsPrev)
+                    const Text(
+                      'Finish previous level',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: LevelInfoPopup._creamText, fontSize: 12, fontWeight: FontWeight.w500, decoration: TextDecoration.none), // Kecilkan font
+                    ),
                 ],
-                const SizedBox(height: 16),
-                // Button based on PNG designs
+                const SizedBox(height: 12), // Kecilkan spacing
                 widget.isLocked
-                  // ── LOCKED STATE ───────────────────────────────
                   ? Container(
-                      width: widget.popupWidth * 0.85,
-                      height: 30,
+                      width: (widget.popupWidth * 0.85) * 0.8, // Sesuaikan dengan ukuran popup baru
+                      height: 40, // Kecilkan tinggi button
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border(bottom: BorderSide(color: tealColor.withOpacity(0.5), width: 4)),
+                        color: LevelInfoPopup._creamText,
+                        borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: CustomPaint(
-                              size: const Size(double.infinity, 30),
-                              painter: GlossyStripesPainter(opacity: 0.15, color: tealColor),
-                            ),
-                          ),
-                          const Icon(Icons.lock_outline, color: Colors.grey, size: 14),
-                        ],
-                      ),
+                      child: const Icon(Icons.lock, color: Colors.black, size: 18), // Kecilkan icon
                     )
-                  // ── UNLOCKED STATE ─────────────────────────────
                   : GestureDetector(
                       onTapDown: (_) => setState(() => _isPressed = true),
                       onTapUp: (_) => setState(() => _isPressed = false),
                       onTapCancel: () => setState(() => _isPressed = false),
                       onTap: widget.onStart,
-                      child: Container(
-                        width: widget.popupWidth * 0.85,
-                        height: 30,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 100),
+                        width: (widget.popupWidth * 0.85) * 0.8, // Sesuaikan dengan ukuran popup baru
+                        height: 40, // Kecilkan tinggi button
+                        transform: Matrix4.translationValues(0, _isPressed ? 2 : 0, 0),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: !_isPressed 
-                            ? Border(bottom: BorderSide(color: tealColor.withOpacity(0.5), width: 4))
-                            : null,
-                          boxShadow: [
-                            if (!_isPressed) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2)),
-                          ],
+                          color: LevelInfoPopup._creamText,
+                          borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: CustomPaint(
-                                size: const Size(double.infinity, 30),
-                                painter: GlossyStripesPainter(opacity: _isPressed ? 0.08 : 0.15, color: tealColor),
-                              ),
-                            ),
-                            Text(
-                              'START LESSON',
-                              style: TextStyle(
-                                color: tealColor,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.5,
-                                decoration: TextDecoration.none,
-                              ),
-                            ),
-                          ],
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Start Quiz',
+                          style: TextStyle(
+                            color: widget.themeColor, // Gunakan theme color untuk teks button
+                            fontSize: 14, // Kecilkan font size
+                            fontWeight: FontWeight.w700,
+                            decoration: TextDecoration.none,
+                          ),
                         ),
                       ),
                     ),

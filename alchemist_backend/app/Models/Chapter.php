@@ -21,3 +21,4 @@ class Chapter extends Model
         return $this->hasMany(Level::class)->orderBy('order_index');
     }
 }
+

@@ -27,3 +27,4 @@ class DailyTaskRegenerateRequest extends FormRequest
         ];
     }
 }
+

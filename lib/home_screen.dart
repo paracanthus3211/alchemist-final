@@ -276,93 +276,113 @@ class _HomeScreenState extends State<HomeScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
           color: _card,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text(
-              _t('streak'),
-              style: TextStyle(
-                color: _cyan,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 12),
+            // Bagian Kiri: Icon + Angka
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Bagian Kiri: Icon + Angka
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset('assets/streak.png', width: 36, height: 36, color: streak > 0 ? null : Colors.white12, colorBlendMode: streak > 0 ? null : BlendMode.modulate),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$streak',
-                      style: TextStyle(
-                        color: streak > 0 ? Colors.white : Colors.white24,
-                        fontSize: 42,
-                        fontWeight: FontWeight.w900,
-                        height: 1,
-                      ),
-                    ),
-                  ],
-                ),
-                
-                // Bagian Kanan: Hari (Pake FittedBox biar auto-kecil kalo gak muat)
-                Flexible(
-                  child: FittedBox(
-                    child: Row(
-                      children: List.generate(7, (i) {
-                        final date = today.subtract(Duration(days: 6 - i));
-                        final dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-                        final dayLabel = dayNames[date.weekday % 7];
-                        final isToday = i == 6;
-                        final isActive = isToday;
-
-                        return Container(
-                          margin: const EdgeInsets.only(left: 4),
-                          width: 24, 
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: isActive ? _lime : Colors.white.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                dayLabel,
-                                style: TextStyle(
-                                  color: isActive ? Colors.black : Colors.white38,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                isToday ? '$streak' : '·',
-                                style: TextStyle(
-                                  color: isActive ? Colors.black : Colors.white24,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ),
+                Image.asset('assets/streak.png', width: 40, height: 40, color: streak > 0 ? null : Colors.white12, colorBlendMode: streak > 0 ? null : BlendMode.modulate),
+                const SizedBox(width: 8),
+                Text(
+                  '$streak',
+                  style: TextStyle(
+                    color: streak > 0 ? Colors.white : Colors.white24,
+                    fontSize: 48,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
                   ),
                 ),
               ],
+            ),
+            
+            const SizedBox(width: 24),
+            
+            // Bagian Kanan: 7 Hari dalam satu baris
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: List.generate(7, (i) {
+                    final date = today.subtract(Duration(days: 6 - i));
+                    final dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                    final monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    final dayLabel = dayNames[date.weekday % 7];
+                    final dateLabel = '${date.day} ${monthNames[date.month - 1]}';
+                    final isToday = date.year == today.year && 
+                                   date.month == today.month && 
+                                   date.day == today.day;
+
+                    if (isToday) {
+                      // Hari ini: dengan background lime
+                      return Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _lime,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              dayLabel,
+                              style: GoogleFonts.spaceGrotesk(
+                                color: const Color(0xFF021A1A),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              dateLabel,
+                              style: GoogleFonts.spaceGrotesk(
+                                color: Colors.black.withValues(alpha: 0.7),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    } else {
+                      // Hari lain: hanya teks
+                      return Container(
+                        margin: const EdgeInsets.only(right: 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              dayLabel,
+                              style: GoogleFonts.spaceGrotesk(
+                                color: Colors.white.withValues(alpha: 0.7),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              dateLabel,
+                              style: GoogleFonts.spaceGrotesk(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  }),
+                ),
+              ),
             ),
           ],
         ),

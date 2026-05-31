@@ -6,9 +6,9 @@ import 'services/settings_service.dart';
 import 'widgets/background_wrapper.dart';
 import 'services/api_service.dart';
 import 'welcome_screen.dart';
-import 'add_friends_screen.dart';
 import 'models/user_model.dart';
-import 'rank_hierarchy_screen.dart';
+import 'rank_screen.dart';
+import 'rank_selector_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final int? userId;
@@ -29,6 +29,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _followingCount = 0;
   int _followerCount = 0;
   AppUser? _friendUser;
+  String _friendshipStatus = 'none'; // none, pending, accepted, requested_to_me
+  bool _isSendingRequest = false;
   bool get _isSelf => widget.userId == null;
 
   // Global Settings handled by SettingsService
@@ -71,6 +73,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _followingCount = statsData['following'] ?? 0;
             _followerCount = statsData['followers'] ?? 0;
             _ranks = ranks;
+            _friendshipStatus = profile['friendship_status'] ?? 'none';
             
             final xp = _friendUser!.totalXp;
             _currentRank = _ranks.lastWhere((r) => (r['xp_threshold'] ?? 0) <= xp, orElse: () => null);
@@ -316,7 +319,132 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ),
+
+        // ─── ADD FRIEND + FOLLOWING BUTTONS (only on friend profiles) ───
+        if (!_isSelf) ...
+          [
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  // ADD FRIEND button
+                  Expanded(
+                    child: _buildFriendButton(),
+                  ),
+                  const SizedBox(width: 12),
+                  // FOLLOWING button
+                  Expanded(
+                    child: _buildFollowButton(),
+                  ),
+                ],
+              ),
+            ),
+          ],
       ],
+    );
+  }
+
+  Widget _buildFriendButton() {
+    final isFriend = _friendshipStatus == 'accepted';
+    final isPending = _friendshipStatus == 'pending';
+    final isRequestedToMe = _friendshipStatus == 'requested_to_me';
+
+    String label;
+    IconData icon;
+    if (isFriend) {
+      label = 'FRIENDS';
+      icon = Icons.check;
+    } else if (isPending) {
+      label = 'REQUESTED';
+      icon = Icons.hourglass_top_outlined;
+    } else if (isRequestedToMe) {
+      label = 'ACCEPT';
+      icon = Icons.person_add_outlined;
+    } else {
+      label = 'ADD FRIEND';
+      icon = Icons.person_add_outlined;
+    }
+
+    return GestureDetector(
+      onTap: _isSendingRequest ? null : () async {
+        if (isFriend || isPending) return;
+        setState(() => _isSendingRequest = true);
+        if (isRequestedToMe) {
+          await ApiService().acceptFriendRequest(widget.userId!.toString());
+        } else {
+          await ApiService().sendFriendRequest(widget.userId!.toString());
+        }
+        await _loadData();
+        setState(() => _isSendingRequest = false);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A2223),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isFriend ? _cyan.withOpacity(0.3) : Colors.white.withOpacity(0.08),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: _cyan, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.spaceGrotesk(
+                color: _cyan,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFollowButton() {
+    // "Following" means: we are following them (user_id = me, friend_id = them)
+    // friendship_status == 'pending' means I sent them a follow request (= following)
+    // friendship_status == 'accepted' means mutual follow
+    final isFollowing = _friendshipStatus == 'accepted' || _friendshipStatus == 'pending';
+
+    return GestureDetector(
+      onTap: () async {
+        if (widget.userId == null) return;
+        await ApiService().toggleFollow(widget.userId!);
+        await _loadData();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A2223),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isFollowing ? _yellow.withOpacity(0.3) : Colors.white.withOpacity(0.08),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(isFollowing ? Icons.check : Icons.add, color: _yellow, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              isFollowing ? 'FOLLOWING' : 'FOLLOW',
+              style: GoogleFonts.spaceGrotesk(
+                color: _yellow,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -492,6 +620,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final articleId = (article != null) ? article['id'] : h['article_id'];
             
             return _historyCard(
+              h,
               title,
               isCompleted ? _t('completed') : _t('reading'),
               _formatRelativeTime(h['last_read_at'] ?? h['updated_at']),
@@ -505,6 +634,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             );
           }),
       ],
+    );
+  }
+
+  Widget _articlePlaceholder() {
+    return Container(
+      color: const Color(0xFF1A2223),
+      child: Center(
+        child: Icon(Icons.menu_book_outlined, color: Colors.white.withOpacity(0.15), size: 48),
+      ),
     );
   }
 
@@ -523,7 +661,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _historyCard(String title, String status, String time, Color iconColor, {VoidCallback? onTap}) {
+  Widget _historyCard(dynamic h, String title, String status, String time, Color iconColor, {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -532,18 +670,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Article Thumbnail
-            Container(
-              height: 160,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                image: const DecorationImage(
-                  image: AssetImage('assets/read_article1.png'),
-                  fit: BoxFit.cover,
+            Builder(builder: (context) {
+              // History can be flat (from own history) or nested (from friend profile)
+              // Backend returns articles.* directly, so image_url is at top level
+              final article = h is Map ? (h['article'] as Map?) : null;
+              final imgUrl = (article?['image_url'] ?? h['image_url']) as String?;
+              final hasNetwork = imgUrl != null && imgUrl.startsWith('http');
+              return Container(
+                height: 160,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A2223),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-              ),
-            ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: hasNetwork
+                    ? Image.network(
+                        imgUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _articlePlaceholder(),
+                      )
+                    : _articlePlaceholder(),
+                ),
+              );
+            }),
             const SizedBox(height: 12),
             // Title
             Text(
@@ -642,7 +793,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const RankHierarchyScreen()),
+                  MaterialPageRoute(builder: (_) => const RankScreen()),
                 );
               },
               child: Text(
@@ -813,6 +964,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         const SizedBox(height: 20),
+        
+        // Rank Selector
+        _settingsTile(
+          'Select Rank',
+          'Choose your rank',
+          'assets/rank.png',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RankSelectorScreen()),
+            ).then((_) => _loadData());
+          },
+        ),
         
         // Font Size
         _settingsTile(

@@ -138,3 +138,4 @@ class AvatarController extends Controller
         ]);
     }
 }
+

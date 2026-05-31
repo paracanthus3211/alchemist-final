@@ -256,3 +256,4 @@ class DailyTaskController extends Controller
         ]);
     }
 }
+

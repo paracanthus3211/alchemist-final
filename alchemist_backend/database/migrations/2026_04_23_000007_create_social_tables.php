@@ -24,10 +24,20 @@ return new class extends Migration
 
             $table->unique(['user_id', 'friend_id']);
         });
+
+        Schema::create('follows', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('follower_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('following_id')->constrained('users')->onDelete('cascade');
+            $table->timestamps();
+
+            $table->unique(['follower_id', 'following_id']);
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('follows');
         Schema::dropIfExists('friends');
         Schema::table('users', function (Blueprint $table) {
             $table->dropConstrainedForeignId('equipped_avatar_id');

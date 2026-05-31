@@ -84,17 +84,18 @@
         background: #1a2527;
         border-radius: 16px;
         padding: 20px;
-        width: 140px;
+        width: 180px;
         display: flex;
         flex-direction: column;
         align-items: center;
         text-align: center;
     }
 
-    .stat-box svg {
-        width: 36px;
-        height: 36px;
+    .stat-box svg, .stat-box img {
+        width: 48px;
+        height: 48px;
         margin-bottom: 8px;
+        object-fit: contain;
     }
     
     .stat-value {
@@ -317,11 +318,12 @@
 
     <!-- HEADER -->
     <div class="profile-avatar-wrap">
-        @if($user->avatar_url || $user->equippedAvatar)
-            <img src="{{ $user->equippedAvatar->image_url ?? $user->avatar_url }}" class="profile-avatar">
-        @else
-            <div class="profile-avatar" style="background: var(--lime, #b8f400);"></div>
-        @endif
+        @php
+            $avatarSrc = $user->equippedAvatar
+                ? $user->equippedAvatar->image_url
+                : ($user->avatar_url ?: '/images/chapter.png');
+        @endphp
+        <img src="{{ $avatarSrc }}" class="profile-avatar" alt="{{ $user->username }}">
         <a href="{{ route('profile.avatar') }}" class="edit-avatar-btn" style="text-decoration: none; color: inherit;">
             <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
         </a>
@@ -338,27 +340,21 @@
     <div class="stats-grid">
         <div class="stat-box">
             <!-- Following Icon (Yellow Green) -->
-            <svg viewBox="0 0 24 24" fill="var(--lime, #b8f400)">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-            </svg>
+            <img src="/images/following.png" alt="Following">
             <div class="stat-value">{{ $followingCount }}</div>
             <div class="stat-label">Following</div>
         </div>
         
         <div class="stat-box">
             <!-- Friends Icon (Cyan) -->
-            <svg viewBox="0 0 24 24" fill="var(--cyan, #00d4d4)">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-            </svg>
+            <img src="/images/friends.png" alt="Friends">
             <div class="stat-value">{{ $friendsCount }}</div>
             <div class="stat-label">Friends</div>
         </div>
         
         <div class="stat-box">
             <!-- Followers Icon (Pink) -->
-            <svg viewBox="0 0 24 24" fill="#ff00cc">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-            </svg>
+            <img src="/images/followers.png" alt="Followers">
             <div class="stat-value">{{ $followersCount }}</div>
             <div class="stat-label">Followers</div>
         </div>
@@ -386,15 +382,8 @@
             <div class="history-time">Last read... {{ rand(1, 12) }} hours ago</div>
         </div>
         @empty
-        <div class="history-card">
-            <div class="history-thumbnail"></div>
-            <div class="history-title">Muatan atom</div>
-            <div class="history-time">Last read... 9 hours ago</div>
-        </div>
-        <div class="history-card">
-            <div class="history-thumbnail"></div>
-            <div class="history-title">Muatan atom</div>
-            <div class="history-time">Last read... 9 hours ago</div>
+        <div style="text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.3);">
+            <p>No reading history yet</p>
         </div>
         @endforelse
     </div>

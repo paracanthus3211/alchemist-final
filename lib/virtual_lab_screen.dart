@@ -80,6 +80,7 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
 
 
   late Map<String, Chemical> _chemicals;
+  static const String _vlAssetBase = 'assets/virtual_lab';
 
   @override
   void initState() {
@@ -122,6 +123,7 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
     "hcl+caco3": ReactionResult(eq: "2HCl + CaCO₃ → CaCl₂ + CO₂↑ + H₂O", desc: "Asam melarutkan batu kapur! Keluar gelembung CO₂", type: "💨 Gas Formation", product: "CaCl2", productFormula: "CaCl2", color: const Color(0xFF69DB7E), gradient: [const Color(0xFF69DB7E), const Color(0xFF2B8A3E)]),
     "hcl+na2co3": ReactionResult(eq: "2HCl + Na₂CO₃ → 2NaCl + CO₂↑ + H₂O", desc: "Asam bereaksi dengan soda kue menghasilkan gelembung CO₂!", type: "💨 Gas Formation", product: "NaCl", productFormula: "NaCl", color: const Color(0xFF69DB7E), gradient: [const Color(0xFF69DB7E), const Color(0xFF2B8A3E)]),
     "agno3+nacl": ReactionResult(eq: "AgNO₃ + NaCl → AgCl↓ + NaNO₃", desc: "Terbentuk endapan putih perak klorida!", type: "💎 Precipitation", product: "AgCl", productFormula: "AgCl", color: const Color(0xFFF8F9FA), gradient: [const Color(0xFFF8F9FA), const Color(0xFFDEE2E6)]),
+    "agno3+kcl": ReactionResult(eq: "AgNO₃ + KCl → AgCl↓ + KNO₃", desc: "Terbentuk endapan putih perak klorida!", type: "💎 Precipitation", product: "AgCl", productFormula: "AgCl", color: const Color(0xFFF8F9FA), gradient: [const Color(0xFFF8F9FA), const Color(0xFFDEE2E6)]),
     "pbno3+ki": ReactionResult(eq: "Pb(NO₃)₂ + 2KI → PbI₂↓ + 2KNO₃", desc: "Terbentuk endapan kuning cerah timbal iodida!", type: "💎 Precipitation", product: "PbI2", productFormula: "PbI2", color: const Color(0xFFFFD43B), gradient: [const Color(0xFFFFD43B), const Color(0xFFFAB005)]),
     "cuso4+naoh": ReactionResult(eq: "CuSO₄ + 2NaOH → Cu(OH)₂↓ + Na₂SO₄", desc: "Terbentuk endapan biru tembaga(II) hidroksida!", type: "💎 Precipitation", product: "Cu(OH)2", productFormula: "Cu(OH)2", color: const Color(0xFF4DABF7), gradient: [const Color(0xFF4DABF7), const Color(0xFF1864AB)]),
     "fecl3+naoh": ReactionResult(eq: "FeCl₃ + 3NaOH → Fe(OH)₃↓ + 3NaCl", desc: "Terbentuk endapan coklat besi(III) hidroksida!", type: "💎 Precipitation", product: "Fe(OH)3", productFormula: "Fe(OH)3", color: const Color(0xFFD4A373), gradient: [const Color(0xFFD4A373), const Color(0xFFB5835A)]),
@@ -248,15 +250,32 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
       _beakerB = {'chemical': null, 'amount': 0, 'color': Colors.transparent, 'formula': ''};
     });
 
-    // Award XP only if this pair hasn't been reacted before in this session
-    if (!_reactedPairs.contains(canonicalKey)) {
-      _reactedPairs.add(canonicalKey);
-      ApiService().addLabXp(10);
-      setState(() {}); // Refresh header XP display
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) _showToast("⭐ +10 XP! Reaksi baru ditemukan!");
+    // Award XP (+25) only once per reaction (server-enforced),
+    // and avoid spamming the server for the same reaction within the same session.
+    if (_reactedPairs.contains(canonicalKey)) {
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) _showToast("Reaksi ini sudah dicoba. XP tidak bertambah.");
       });
+      return;
     }
+
+    ApiService().recordLabReaction(canonicalKey).then((data) {
+      if (!mounted) return;
+      setState(() {}); // Refresh header XP display
+      if (data == null) {
+        _showToast("⚠️ Gagal menyimpan XP (server).");
+        return;
+      }
+      // Mark as tried this session (whether XP was added or not),
+      // so we don't keep spamming the server for the same pair.
+      _reactedPairs.add(canonicalKey);
+      final xpAdded = ApiService.toInt(data['xp_added']);
+      if (xpAdded > 0) {
+        _showToast("⭐ +$xpAdded XP! Reaksi baru ditemukan!");
+      } else {
+        _showToast("Reaksi sudah pernah dilakukan. XP tidak bertambah.");
+      }
+    });
   }
 
 
@@ -307,8 +326,7 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
           tube['amount'] = (tube['amount'] - 5).clamp(0, 100);
           if (tube['amount'] == 0) {
             tube['chemical'] = null;
-            ApiService().addLabXp(10);
-            _showToast("🔥 Tube ${_selectedTubeIndex! + 1} habis! +10 XP");
+            _showToast("🔥 Tube ${_selectedTubeIndex! + 1} kosong (hasil diuapkan)");
           }
         }
       });
@@ -359,9 +377,6 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // Header
-              _buildHeader(),
-              
               Expanded(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
@@ -369,22 +384,21 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 12),
-                      // Lab Area
+                      // Lab Area (title + beakers + tubes + bunsen)
                       _buildLabArea(),
-                      const SizedBox(height: 12),
-                      
-                      // Controls
+                      const SizedBox(height: 16),
+
+                      // Action buttons
                       _buildControlButtons(),
-                      const SizedBox(height: 12),
-                      
+                      const SizedBox(height: 20),
+
                       // Inventory
                       _buildInventory(),
-                      const SizedBox(height: 12),
-                      
+                      const SizedBox(height: 20),
 
                       // Reaction Info
                       _buildReactionInfo(),
-                      const SizedBox(height: 100),
+                      const SizedBox(height: 40),
                     ],
                   ),
                 ),
@@ -392,183 +406,222 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.arrow_back, color: Colors.white),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text("⚗️ ALCHEMIST LAB PRO", style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
-              Text("22 Chemicals | Mix, Heat & Calculate", style: GoogleFonts.spaceGrotesk(color: Colors.white.withOpacity(0.5), fontSize: 10)),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: const Color(0xFFFFD700).withOpacity(0.15), borderRadius: BorderRadius.circular(30)),
-            child: Row(
-              children: [
-                const Icon(Icons.star, color: Color(0xFFFFD700), size: 16),
-                const SizedBox(width: 4),
-                Text("$_displayXp XP", style: GoogleFonts.spaceGrotesk(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14)),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
 
   Widget _buildLabArea() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(24)),
-      child: Column(
-        children: [
-          // Beakers
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
+      children: [
+        // Title
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _buildBeakerWidget("A", _beakerA, _selectedBeaker == "A", () => _selectBeaker("A"))),
-              const SizedBox(width: 16),
-              Expanded(child: _buildBeakerWidget("B", _beakerB, _selectedBeaker == "B", () => _selectBeaker("B"))),
+              Text('Alchemist virtual lab',
+                  style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500)),
+              Text('22 chemicals | mix, Heat & calculate Molar mass!',
+                  style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w400)),
             ],
           ),
-          const SizedBox(height: 16),
-          
-          // Tubes
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(3, (index) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: _buildTubeWidget(index, _tubes[index], _selectedTubeIndex == index, () => setState(() => _selectedTubeIndex = index)),
-            )),
-          ),
-          const SizedBox(height: 16),
-          
-          // Bunsen
-          Column(
-            children: [
-              _buildBunsenFlame(),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: _toggleBunsen,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.local_fire_department, color: _bunsenOn ? Colors.orange : Colors.white, size: 16),
-                      const SizedBox(width: 6),
-                      const Text("Bunsen Burner", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                    ],
+        ),
+
+        // Beakers row
+        Row(
+          children: [
+            Expanded(child: _buildBeakerWidget("A", _beakerA, _selectedBeaker == "A", () => _selectBeaker("A"))),
+            const SizedBox(width: 12),
+            Expanded(child: _buildBeakerWidget("B", _beakerB, _selectedBeaker == "B", () => _selectBeaker("B"))),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Tubes row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(3, (index) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: _buildTubeWidget(index, _tubes[index], _selectedTubeIndex == index,
+                () => setState(() => _selectedTubeIndex = index)),
+          )),
+        ),
+        const SizedBox(height: 16),
+
+        // Bunsen burner flame + button
+        Column(
+          children: [
+            _buildBunsenFlame(),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _toggleBunsen,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE67E22),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), offset: const Offset(0, 4), blurRadius: 0)],
+                ),
+                child: Text('BUNSEN BURNER',
+                    style: GoogleFonts.spaceGrotesk(
+                        color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBeakerWidget(String label, Map<String, dynamic> data, bool isSelected, VoidCallback onTap) {
+    final int amount = ApiService.toInt(data['amount']);
+    final String? chemId = data['chemical'] as String?;
+    final Chemical? chem = chemId != null ? _chemicals[chemId] : null;
+    final bool has = chemId != null && amount > 0;
+    final Color liquidColor = has ? (data['color'] as Color? ?? const Color(0xFF00BCD4)) : Colors.transparent;
+    final Color borderColor = isSelected ? const Color(0xFF00FBFF) : const Color(0xFF4A5568);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Beaker container
+          Container(
+            width: 160,
+            height: 200,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: borderColor,
+                width: 3,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              color: const Color(0xFF0F1419),
+            ),
+            child: Stack(
+              children: [
+                // Liquid fill
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    height: 160 * (amount.clamp(0, 100) / 100.0),
+                    decoration: BoxDecoration(
+                      color: liquidColor.withOpacity(0.7),
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(17),
+                        bottomRight: Radius.circular(17),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+                // Top label bar
+                Container(
+                  width: double.infinity,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A2332),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(17),
+                      topRight: Radius.circular(17),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Beaker $label',
+                    style: GoogleFonts.spaceGrotesk(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Volume and status
+          Text(
+            '$amount ml',
+            style: GoogleFonts.spaceGrotesk(
+              color: const Color(0xFF9CA3AF),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            has ? (chem?.name ?? 'UNKNOWN') : 'EMPTY',
+            style: GoogleFonts.spaceGrotesk(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBeakerWidget(String label, Map<String, dynamic> data, bool isSelected, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFFD700).withOpacity(0.1) : Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? const Color(0xFFFFD700) : Colors.transparent, width: 2),
-        ),
-        child: Column(
-          children: [
-            Text("🧪 Beaker $label", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Container(
-              height: 100,
-              width: 70,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
-                border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
-              ),
-              child: Stack(
-                alignment: Alignment.bottomCenter,
-                children: [
-                  if (data['amount'] > 0)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      height: (data['amount'] as int).toDouble(),
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: data['color'] as Color,
-                        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(18), bottomRight: Radius.circular(18)),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text("${data['amount']} ml", style: const TextStyle(color: Colors.white70, fontSize: 10)),
-            Text(data['chemical'] != null ? _chemicals[data['chemical']]?.name ?? "Empty" : "Empty", 
-                 style: const TextStyle(color: Color(0xFFFFD700), fontSize: 9, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildTubeWidget(int index, Map<String, dynamic> data, bool isSelected, VoidCallback onTap) {
+    final int amount = ApiService.toInt(data['amount']);
+    final bool has = (data['chemical'] != null || data['name'] != null) && amount > 0;
+    final Color liquidColor = has ? (data['color'] as Color? ?? const Color(0xFF00BCD4)) : Colors.transparent;
+    final String chemName = has ? (data['name'] ?? data['chemical'] ?? 'UNKNOWN') : 'EMPTY';
+
     return GestureDetector(
       onTap: onTap,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          // Tube container
           Container(
-            height: 90,
-            width: 55,
+            width: 100,
+            height: 140,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(15), bottomRight: Radius.circular(15)),
-              border: Border.all(color: isSelected ? const Color(0xFFFFD700) : Colors.white.withOpacity(0.2), width: 2),
+              border: Border.all(
+                color: const Color(0xFF4A5568),
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF0F1419),
             ),
             child: Stack(
-              alignment: Alignment.bottomCenter,
               children: [
-                if (data['amount'] > 0)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    height: (data['amount'] as int).toDouble() * 0.9,
-                    width: double.infinity,
+                // Liquid fill
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    height: 120 * (amount.clamp(0, 100) / 100.0),
                     decoration: BoxDecoration(
-                      color: data['color'] as Color,
-                      borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(13), bottomRight: Radius.circular(13)),
+                      color: liquidColor.withOpacity(0.7),
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(14),
+                        bottomRight: Radius.circular(14),
+                      ),
                     ),
                   ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text("Tube ${index + 1}", style: const TextStyle(color: Colors.white54, fontSize: 9)),
+          const SizedBox(height: 8),
+          // Tube label
+          Text(
+            'Tube ${index + 1}',
+            style: GoogleFonts.spaceGrotesk(
+              color: const Color(0xFF9CA3AF),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -576,131 +629,246 @@ class _VirtualLabScreenState extends State<VirtualLabScreen> {
 
   Widget _buildBunsenFlame() {
     return AnimatedOpacity(
-      duration: const Duration(milliseconds: 300),
-      opacity: _bunsenOn ? 1.0 : 0.0,
-      child: Container(
-        width: 35, height: 35,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(colors: [Color(0xFFFF6B00), Color(0xFFFFD700)]),
-        ),
+      duration: const Duration(milliseconds: 250),
+      opacity: _bunsenOn ? 1.0 : 0.3,
+      child: Image.asset(
+        'assets/bunsen_burner.png',
+        width: 80,
+        height: 80,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.orange,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Center(
+              child: Icon(Icons.local_fire_department, color: Colors.white, size: 40),
+            ),
+          );
+        },
       ),
     );
   }
 
   Widget _buildControlButtons() {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 4,
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      childAspectRatio: 2.2,
-      children: [
-        _actionButton("React", const Color(0xFFFFD700), Colors.black, Icons.play_arrow, _startReaction),
-        _actionButton("Add", Colors.white.withOpacity(0.1), Colors.white, Icons.add, _addChemical),
-        _actionButton("Transfer", Colors.white.withOpacity(0.1), Colors.white, Icons.swap_horiz, _transferToTube),
-        _actionButton("Reset", Colors.red.withOpacity(0.2), const Color(0xFFFF6B6B), Icons.refresh, _resetExperiment),
-      ],
+    final buttons = [
+      {'label': 'REACT',    'color': const Color(0xFFB8F400), 'shadow': const Color(0xFF8CBD00), 'action': _startReaction},
+      {'label': 'ADD',      'color': const Color(0xFFD896FF), 'shadow': const Color(0xFFA256CC), 'action': _addChemical},
+      {'label': 'TRANSFER', 'color': const Color(0xFF00D4D4), 'shadow': const Color(0xFF009999), 'action': _transferToTube},
+      {'label': 'RESET',    'color': const Color(0xFFFF4D4D), 'shadow': const Color(0xFFCC2424), 'action': _resetExperiment},
+    ];
+
+    return Row(
+      children: buttons.map((b) {
+        final color = b['color'] as Color;
+        final shadow = b['shadow'] as Color;
+        final action = b['action'] as VoidCallback;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _LabButton(label: b['label'] as String, color: color, shadowColor: shadow, onPressed: action),
+          ),
+        );
+      }).toList(),
     );
   }
 
-  Widget _actionButton(String label, Color bg, Color text, IconData icon, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: text, size: 14),
-            const SizedBox(width: 4),
-            Text(label, style: TextStyle(color: text, fontWeight: FontWeight.bold, fontSize: 10)),
-          ],
-        ),
-      ),
-    );
-  }
+  // _actionButton removed in favor of PNG button assets
 
   Widget _buildInventory() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(24)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.science, color: Colors.white, size: 16),
-              SizedBox(width: 8),
-              Text("Chemical Inventory (22 Bahan)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 250,
-            child: GridView.builder(
-              padding: EdgeInsets.zero,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 2.8, crossAxisSpacing: 8, mainAxisSpacing: 8),
-              itemCount: _chemicals.length,
-              itemBuilder: (context, index) {
-                final chem = _chemicals.values.toList()[index];
-                final isSelected = _selectedChemicalId == chem.id;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedChemicalId = chem.id);
-                    _showToast("✅ Selected: ${chem.fullName} (${chem.formula})");
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFFFFD700).withOpacity(0.1) : Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: isSelected ? const Color(0xFFFFD700) : Colors.transparent),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(width: 35, height: 35, decoration: BoxDecoration(color: chem.color, borderRadius: BorderRadius.circular(10))),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text("${chem.emoji} ${chem.name}", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                              Text(chem.fullName, style: const TextStyle(color: Colors.white38, fontSize: 9), overflow: TextOverflow.ellipsis),
-                            ],
-                          ),
-                        ),
-                        Text("${chem.amount}", style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 2.6,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: _chemicals.length,
+      itemBuilder: (context, index) {
+        final chem = _chemicals.values.toList()[index];
+        final isSelected = _selectedChemicalId == chem.id;
+        return GestureDetector(
+          onTap: () {
+            setState(() => _selectedChemicalId = chem.id);
+            _showToast('Selected: ${chem.fullName}');
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFF00D4D4).withOpacity(0.12) : const Color(0xFF0D2B2B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected ? const Color(0xFF00D4D4) : Colors.transparent,
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: chem.color, borderRadius: BorderRadius.circular(8)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(chem.name,
+                          style: GoogleFonts.spaceGrotesk(
+                              color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                      Text(chem.fullName,
+                          style: GoogleFonts.spaceGrotesk(
+                              color: Colors.white54, fontSize: 9),
+                          overflow: TextOverflow.ellipsis),
+                    ],
                   ),
-                );
-              },
+                ),
+                Text('${chem.amount} ml',
+                    style: GoogleFonts.spaceGrotesk(
+                        color: Colors.white54, fontSize: 9, fontWeight: FontWeight.w500)),
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildReactionInfo() {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(20)),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1F20),
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Column(
         children: [
-          Text(_currentEquation, style: const TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(_currentReactionDesc, style: const TextStyle(color: Colors.white70, fontSize: 10), textAlign: TextAlign.center),
-          const SizedBox(height: 6),
+          Text(_currentEquation,
+              style: GoogleFonts.spaceGrotesk(
+                  color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 10),
+          Text(_currentReactionDesc,
+              style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 14),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 14),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(color: const Color(0xFFFFD700).withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-            child: Text(_currentReactionType, style: const TextStyle(color: Color(0xFFFFD700), fontSize: 9)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A3A3A),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(_currentReactionType,
+                style: GoogleFonts.spaceGrotesk(color: Colors.white70, fontSize: 13)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Tombol lab dengan efek 3D press (warna solid).
+class _LabButton extends StatefulWidget {
+  final String label;
+  final Color color;
+  final Color shadowColor;
+  final VoidCallback onPressed;
+
+  const _LabButton({
+    required this.label,
+    required this.color,
+    required this.shadowColor,
+    required this.onPressed,
+  });
+
+  @override
+  State<_LabButton> createState() => _LabButtonState();
+}
+
+class _LabButtonState extends State<_LabButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onPressed,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 60),
+        transform: Matrix4.translationValues(0, _pressed ? 4 : 0, 0),
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: _pressed
+              ? []
+              : [BoxShadow(color: widget.shadowColor, offset: const Offset(0, 5), blurRadius: 0)],
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Center(
+          child: Text(
+            widget.label,
+            style: GoogleFonts.spaceGrotesk(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tombol gambar dengan efek "mendelep" (3D press).
+class _ImageButton3D extends StatefulWidget {
+  final String assetPath;
+  final double height;
+  final VoidCallback onPressed;
+
+  const _ImageButton3D({
+    required this.assetPath,
+    required this.height,
+    required this.onPressed,
+  });
+
+  @override
+  State<_ImageButton3D> createState() => _ImageButton3DState();
+}
+
+class _ImageButton3DState extends State<_ImageButton3D> {
+  bool _pressed = false;
+
+  void _setPressed(bool v) {
+    if (_pressed == v) return;
+    setState(() => _pressed = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _setPressed(true),
+      onTapCancel: () => _setPressed(false),
+      onTapUp: (_) => _setPressed(false),
+      onTap: widget.onPressed,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, _pressed ? 5 : 0, 0),
+        child: Image.asset(
+          widget.assetPath,
+          height: widget.height,
+          fit: BoxFit.contain,
+        ),
       ),
     );
   }

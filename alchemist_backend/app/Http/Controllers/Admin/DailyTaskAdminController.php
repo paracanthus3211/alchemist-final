@@ -87,3 +87,4 @@ class DailyTaskAdminController extends Controller
             ->with('success', 'Daily task template deleted successfully!');
     }
 }
+

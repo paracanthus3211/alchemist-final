@@ -24,9 +24,9 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
   bool _searching = false;
   final Set<String> _sentRequests = {};
 
-  static const _cyan = Color(0xFF00FBFF);
-  static const _cardBg = Color(0xFF1A1F2E);
-  static const _bg = Color(0xFF0D1117);
+  static const _cyan = Color(0xFF00D5C8);
+  static const _cardBg = Color(0xFF152224);
+  static const _bg = Color(0xFF0C1214);
 
   @override
   void initState() {
@@ -85,44 +85,35 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── HEADER ───
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'SOCIAL LAB',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: _cyan,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2.0,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
+            const SizedBox(height: 24),
             // ─── TABS ───
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TabBar(
-                controller: _tabController,
-                dividerColor: Colors.white12,
-                indicatorColor: _cyan,
-                indicatorWeight: 2.5,
-                indicatorSize: TabBarIndicatorSize.label,
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white38,
-                labelStyle: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.0),
-                unselectedLabelStyle: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700, fontSize: 13),
-                tabs: const [
-                  Tab(text: 'ADD FRIENDS'),
-                  Tab(text: 'YOUR FRIENDS'),
-                  Tab(text: 'REQUESTS'),
-                ],
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF151E20),
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: TabBar(
+                  controller: _tabController,
+                  dividerColor: Colors.transparent,
+                  indicator: BoxDecoration(
+                    color: const Color(0xFF033F40),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  labelColor: _cyan,
+                  unselectedLabelColor: const Color(0xFF6B7A7D),
+                  labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.0),
+                  unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.0),
+                  tabs: const [
+                    Tab(text: 'ADD FRIENDS'),
+                    Tab(text: 'YOUR FRIENDS'),
+                    Tab(text: 'REQUEST'),
+                  ],
+                ),
               ),
             ),
 
@@ -167,7 +158,9 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
                       return _friendCard(
                         name: u['username'] ?? 'User',
                         level: 'LVL ${u['level'] ?? 1}',
-                        rank: u['rank_title'] ?? 'Novice',
+                        rank: '${u['rank_title'] ?? 'NOVICE'} • CHAPTER ${u['level'] ?? 1}',
+                        xpValue: (u['xp'] ?? 0).toString(),
+                        rankIconUrl: u['rank_icon_url'],
                         avatarUrl: ApiService.getAvatarUrl(u['avatar_url'], fallbackSeed: u['username']),
                         rankColor: _cyan,
                         onTap: () {
@@ -175,15 +168,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
                         },
                         trailing: GestureDetector(
                           onTap: sent ? null : () => _sendRequest(uid),
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: sent ? Colors.white.withOpacity(0.05) : _cyan.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: sent ? Colors.white12 : _cyan.withOpacity(0.5)),
-                            ),
-                            child: Icon(sent ? Icons.check : Icons.person_add_alt_1, color: sent ? Colors.white24 : _cyan, size: 20),
-                          ),
+                          child: Icon(sent ? Icons.check : Icons.person_add_outlined, color: sent ? Colors.white24 : _cyan, size: 24),
                         ),
                       );
                     },
@@ -224,18 +209,16 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
                       return _friendCard(
                         name: f['username'] ?? 'User',
                         level: 'LVL ${f['level'] ?? 1}',
-                        rank: f['rank_title'] ?? 'Alchemist',
+                        rank: '${f['rank_title'] ?? 'NOVICE'} • CHAPTER ${f['level'] ?? 1}',
+                        xpValue: (f['xp'] ?? 0).toString(),
+                        rankIconUrl: f['rank_icon_url'],
                         avatarUrl: ApiService.getAvatarUrl(f['avatar_url'], fallbackSeed: f['username']),
                         rankColor: _cyan,
                         isOnline: f['is_online'] == true,
                         onTap: () {
                            Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: f['id'])));
                         },
-                        trailing: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(8)),
-                          child: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
-                        ),
+                        trailing: const SizedBox(),
                       );
                     },
                   ),
@@ -270,6 +253,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
             timeAgo: r['time_ago'] ?? 'recently',
             avatarUrl: ApiService.getAvatarUrl(r['avatar_url'], fallbackSeed: r['username']),
             rankColor: _getRankColor(r['rank_title'] ?? ''),
+            rankIconUrl: r['rank_icon_url'],
             onAccept: () => _acceptRequest(rid),
             onIgnore: () => _declineRequest(rid),
           );
@@ -284,25 +268,26 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Container(
-        height: 48,
+        height: 56,
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1F2E),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          color: _cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
         ),
         child: Row(
           children: [
             const SizedBox(width: 14),
-            const Icon(Icons.person_search_outlined, color: Colors.white24, size: 18),
-            const SizedBox(width: 10),
+            const Icon(Icons.search, color: _cyan, size: 20),
+            const SizedBox(width: 12),
             Expanded(
               child: TextField(
                 controller: _searchCtrl,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+                style: const TextStyle(color: Colors.white, fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: hint,
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 12, letterSpacing: 0.5),
+                  hintText: 'Search',
+                  hintStyle: const TextStyle(color: Color(0xFF6B7A7D)),
                   border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 18),
                 ),
                 onSubmitted: onSearch,
                 onChanged: (v) { 
@@ -338,70 +323,79 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
     required String level,
     required String rank,
     String? avatarUrl,
+    String? rankIconUrl,
     required Color rankColor,
     required Widget trailing,
     bool isOnline = false,
+    String? xpValue,
     VoidCallback? onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: _cardBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.03)),
         ),
         child: Row(
           children: [
-            // Avatar
-            Stack(
-              children: [
-                Container(
-                  width: 56, height: 56,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Colors.white.withOpacity(0.06),
-                    image: avatarUrl != null ? DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover) : null,
-                  ),
-                  child: avatarUrl == null ? const Icon(Icons.person, color: Colors.white24, size: 30) : null,
-                ),
-                // Level badge
-                Positioned(
-                  bottom: 0, left: 0, right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0D1117).withOpacity(0.9),
-                      borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(10), bottomRight: Radius.circular(10)),
-                    ),
-                    child: Text(level, textAlign: TextAlign.center, style: const TextStyle(color: _cyan, fontSize: 9, fontWeight: FontWeight.w800)),
-                  ),
-                ),
-                if (isOnline)
-                  Positioned(
-                    top: 2, right: 2,
-                    child: Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle, border: Border.all(color: _cardBg, width: 1.5))),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // Avatar + Badge
+            SizedBox(
+              width: 60,
+              height: 60,
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  Text(name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: rankColor.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
-                    child: Text(rank.toUpperCase(), style: TextStyle(color: rankColor, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      image: avatarUrl != null ? DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover) : null,
+                    ),
+                    child: avatarUrl == null ? const Center(child: Text('CHAPTER', style: TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.bold))) : null,
+                  ),
+                  Positioned(
+                    bottom: -2,
+                    right: -2,
+                    child: (rankIconUrl != null && rankIconUrl.startsWith('http'))
+                        ? Image.network(
+                            rankIconUrl,
+                            width: 28,
+                            height: 28,
+                            fit: BoxFit.contain,
+                          )
+                        : const Icon(Icons.science, size: 16, color: Color(0xFFC59F54)),
                   ),
                 ],
               ),
             ),
-            trailing,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 4),
+                  Text(rank.toUpperCase(), style: const TextStyle(color: Color(0xFF6B7A7D), fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                ],
+              ),
+            ),
+            if (xpValue != null)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(xpValue, style: const TextStyle(color: _cyan, fontSize: 18, fontWeight: FontWeight.w500)),
+                  const Text('XP', style: TextStyle(color: Color(0xFF6B7A7D), fontSize: 10, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            if (trailing is! SizedBox) ...[
+              const SizedBox(width: 16),
+              trailing,
+            ],
           ],
         ),
       ),
@@ -414,6 +408,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> with SingleTickerPr
     required String rank,
     required String timeAgo,
     String? avatarUrl,
+    String? rankIconUrl,
     required Color rankColor,
     required VoidCallback onAccept,
     required VoidCallback onIgnore,

@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Traits\UpdatesDailyTasks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -49,11 +50,11 @@ class AuthController extends Controller
                 'streak_count' => $user->streak_count,
                 'max_streak'   => $user->max_streak,
                 'gender'       => $user->gender,
-                'avatar_url'   => $user->equippedAvatar ? $user->equippedAvatar->image_url : ($user->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $user->username),
+                'avatar_url'   => $user->equippedAvatar ? $user->equippedAvatar->image_url : ($user->avatar_url ?: '/images/chapter.png'),
                 'created_at'   => $user->created_at ? $user->created_at->toIso8601String() : null,
                 'selected_rank_id' => $user->selected_rank_id,
                 'profile_bg_color' => $user->profile_bg_color,
-                'avatar_url'   => $user->equippedAvatar ? $user->equippedAvatar->image_url : ($user->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $user->username),
+                'avatar_url'   => $user->equippedAvatar ? $user->equippedAvatar->image_url : ($user->avatar_url ?: '/images/chapter.png'),
                 'quiz_level'   => $this->_getQuizLevel($user),
             ],
         ]);
@@ -84,7 +85,7 @@ class AuthController extends Controller
             'max_streak'   => $user->max_streak,
             'last_study_at'=> $user->last_study_at ? $user->last_study_at->toIso8601String() : null,
             'equipped_avatar_id' => $user->equipped_avatar_id,
-            'avatar_url'   => $user->equippedAvatar ? $user->equippedAvatar->image_url : ($user->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $user->username),
+            'avatar_url'   => $user->equippedAvatar ? $user->equippedAvatar->image_url : ($user->avatar_url ?: '/images/chapter.png'),
             'gender'       => $user->gender,
             'created_at'   => $user->created_at ? $user->created_at->toIso8601String() : null,
             'selected_rank_id' => $user->selected_rank_id,
@@ -217,12 +218,14 @@ class AuthController extends Controller
         $user = $request->user();
         $totalXpAdded = 0;
         $processedLevels = [];
+        $userPlayedQuiz = false; // Track if user played any quiz
 
         foreach ($request->question_ids as $questionId) {
             $question = \App\Models\Question::find($questionId);
             if (!$question) continue;
 
             $levelId = $question->level_id;
+            $userPlayedQuiz = true; // User played a quiz
 
             // Check if already answered correctly
             $existing = \App\Models\UserQuestionAttempt::where('user_id', $user->id)
@@ -277,8 +280,12 @@ class AuthController extends Controller
 
         $user->save();
 
-        // Update Streak Logic
-        $streakReward = $user->updateStreak();
+        // Update Streak Logic - Update streak if user played any quiz
+        $streakReward = null;
+        if ($userPlayedQuiz) {
+            $user->refresh(); // Refresh to get latest data from DB
+            $streakReward = $user->updateStreak();
+        }
 
         $progress = $this->getQuizProgressData($user);
 
@@ -371,6 +378,135 @@ class AuthController extends Controller
             'xp_added' => $xp,
             'streak' => $user->streak_count,
             'streak_reward' => $streakReward
+        ]);
+    }
+
+    /**
+     * Record a correct Virtual Lab reaction and award XP ONLY once per reaction key.
+     *
+     * Request:
+     * - reaction_key: string (canonical form, e.g. "hcl+naoh" sorted)
+     *
+     * Response:
+     * - xp_added: 25 or 0
+     * - already_completed: bool
+     * - total_xp: int
+     */
+    public function recordLabReaction(Request $request)
+    {
+        $request->validate([
+            'reaction_key' => 'required|string|max:100',
+        ]);
+
+        $user = $request->user();
+        $reactionKey = strtolower(trim($request->reaction_key));
+
+        // Prevent duplicates (DB unique constraint + explicit check for nicer response)
+        $exists = DB::table('user_lab_reactions')
+            ->where('user_id', $user->id)
+            ->where('reaction_key', $reactionKey)
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'status' => 'success',
+                'already_completed' => true,
+                'xp_added' => 0,
+                'total_xp' => $user->xp,
+                'streak' => $user->streak_count,
+            ]);
+        }
+
+        $xp = 25;
+
+        DB::transaction(function () use ($user, $reactionKey, $xp) {
+            DB::table('user_lab_reactions')->insert([
+                'user_id' => $user->id,
+                'reaction_key' => $reactionKey,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $user->xp += $xp;
+            $user->save();
+
+            DB::table('xp_transactions')->insert([
+                'user_id' => $user->id,
+                'source_type' => 'virtual_lab_reaction',
+                'xp_amount' => $xp,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Daily tasks
+            $this->_incrementDailyTaskProgress($user, 'GAIN_XP', $xp);
+            $this->_incrementDailyTaskProgress($user, 'LAB_EXPERIMENT', 1);
+        });
+
+        // Update streak logic (outside transaction is OK)
+        $user->refresh();
+        $streakReward = $user->updateStreak();
+
+        return response()->json([
+            'status' => 'success',
+            'already_completed' => false,
+            'xp_added' => $xp,
+            'total_xp' => $user->xp,
+            'streak' => $user->streak_count,
+            'streak_reward' => $streakReward,
+        ]);
+    }
+
+    /**
+     * Register user with first name, last name, username, and password (no email)
+     */
+    public function register(Request $request)
+    {
+        $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'username' => 'required|string|max:255|unique:users,username',
+            'password' => 'required|string|min:6',
+            'password_confirmation' => 'required|string|same:password',
+        ]);
+
+        // Create user account
+        $user = User::create([
+            'first_name' => $request->first_name,
+            'last_name' => $request->last_name,
+            'username' => $request->username,
+            'email' => $request->username . '@alchemist.local', // Generate email from username
+            'password' => Hash::make($request->password),
+            'role' => 'user',
+            'xp' => 0,
+            'streak_count' => 0,
+            'max_streak' => 0,
+        ]);
+
+        // Generate auth token
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Registrasi berhasil',
+            'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'username' => $user->username,
+                'email' => $user->email,
+                'role' => $user->role,
+                'xp' => $user->xp,
+                'streak_count' => $user->streak_count,
+                'max_streak' => $user->max_streak,
+                'gender' => $user->gender,
+                'avatar_url' => $user->avatar_url ?: '/images/chapter.png',
+                'created_at' => $user->created_at ? $user->created_at->toIso8601String() : null,
+                'selected_rank_id' => $user->selected_rank_id,
+                'profile_bg_color' => $user->profile_bg_color,
+                'quiz_level' => 1,
+            ],
         ]);
     }
 }

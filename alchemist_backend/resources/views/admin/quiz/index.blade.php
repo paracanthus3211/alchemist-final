@@ -146,19 +146,41 @@
         .chapter-card {
             background: var(--card2); border: 1px solid rgba(255,255,255,0.05);
             border-radius: 16px; padding: 24px; margin-bottom: 24px;
+            border-left: 4px solid var(--cyan);
+            position: relative; overflow: hidden;
+        }
+        .chapter-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            opacity: 0.3; border-radius: 16px 16px 0 0;
+            background: var(--chapter-color, var(--cyan));
         }
         .chapter-card-header {
             font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 20px;
             display: flex; justify-content: space-between; align-items: center;
         }
+        .chapter-card-title {
+            display: flex; align-items: center; gap: 12px;
+        }
+        .chapter-color-dot {
+            width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+            box-shadow: 0 0 8px currentColor;
+        }
         .chapter-actions { display: flex; gap: 16px; }
         
-        .level-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+        .level-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
         .level-item {
-            background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.03);
-            border-radius: 12px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.04);
+            border-radius: 12px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;
+            transition: border-color 0.2s, background 0.2s;
         }
-        .level-details .level-num { font-size: 11px; color: var(--cyan); font-weight: 700; text-transform: uppercase; }
+        .level-item:hover {
+            background: rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.08);
+        }
+        .level-item-left { display: flex; align-items: center; gap: 12px; }
+        .level-color-bar {
+            width: 4px; height: 36px; border-radius: 4px; flex-shrink: 0;
+        }
+        .level-details .level-num { font-size: 11px; font-weight: 700; text-transform: uppercase; }
         .level-details .level-name { font-size: 14px; font-weight: 600; color: #fff; margin-top: 2px; }
         .level-actions { display: flex; gap: 16px; align-items: center; }
 
@@ -249,6 +271,80 @@
             text-align: center; font-family: inherit; margin-top: 12px;
         }
         .btn-submit:hover { opacity: 0.9; }
+
+        /* ── CHAPTER SECTION MODAL (add / edit) ── */
+        #chapterModal .modal-box {
+            background: #0a1214;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            max-width: 420px;
+            padding: 24px 24px 20px;
+            gap: 18px;
+        }
+        #chapterModal .modal-header {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        #chapterModal .form-label {
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            color: rgba(255, 255, 255, 0.45);
+        }
+        #chapterModal .form-label-cyan {
+            color: var(--cyan);
+        }
+        #chapterModal .form-control {
+            background: #141c1e;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 11px 14px;
+        }
+        #chapterModal .chapter-color-panel {
+            background: #141c1e;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 14px;
+        }
+        #chapterModal .chapter-color-swatches {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        #chapterModal .chapter-color-swatch {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            padding: 0;
+            transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+        }
+        #chapterModal .chapter-color-swatch:hover {
+            transform: scale(1.05);
+        }
+        #chapterModal .chapter-color-swatch.selected {
+            border-color: #fff;
+            box-shadow: 0 0 0 2px rgba(0, 212, 212, 0.35);
+        }
+        #chapterModal .btn-chapter-save {
+            width: 100%;
+            margin-top: 4px;
+            padding: 11px 16px;
+            border-radius: 10px;
+            background: var(--cyan);
+            color: #000;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        #chapterModal .btn-chapter-save:hover {
+            opacity: 0.92;
+        }
 
         /* ── ULTRA-PREMIUM QUESTION MODAL ── */
         #questionModal.modal-overlay {
@@ -625,11 +721,18 @@
             @if($tab === 'chapter')
                 <div class="tab-pane">
                     @foreach($chapters as $chapter)
-                        <div class="chapter-card">
+                        @php
+                            $chColor = !empty($chapter->icon_emoji) && str_starts_with($chapter->icon_emoji, '#') ? $chapter->icon_emoji : '#00d4d4';
+                        @endphp
+                        <div class="chapter-card" style="--chapter-color: {{ $chColor }}; border-left-color: {{ $chColor }};">
                             <div class="chapter-card-header">
-                                <span>{{ $chapter->title }}</span>
+                                <div class="chapter-card-title">
+                                    <span class="chapter-color-dot" style="background-color: {{ $chColor }}; box-shadow: 0 0 10px {{ $chColor }}55;"></span>
+                                    <span>{{ $chapter->title }}</span>
+                                    <span style="font-size:11px; font-weight:500; color:{{ $chColor }}; background: {{ $chColor }}18; padding: 3px 10px; border-radius:99px; border: 1px solid {{ $chColor }}33;">Chapter {{ $chapter->order_index }}</span>
+                                </div>
                                 <div class="chapter-actions">
-                                    <button class="btn-text cyan-txt" onclick="openEditChapterModal({{ json_encode($chapter) }})">Edit Chapter</button>
+                                    <button class="btn-text" style="color:{{ $chColor }};" onmouseenter="this.style.opacity='0.7'" onmouseleave="this.style.opacity='1'" onclick="openEditChapterModal({{ json_encode($chapter) }})">Edit Chapter</button>
                                     <form method="POST" action="{{ route('admin.chapters.destroy', $chapter->id) }}" style="display:inline;" onsubmit="return confirm('Delete this chapter? This will delete all levels inside!')">
                                         @csrf
                                         <button type="submit" class="btn-text danger">Delete Chapter</button>
@@ -637,16 +740,38 @@
                                 </div>
                             </div>
                             
+                            <!-- XP Threshold info -->
+                            @if($chapter->xp_threshold > 0)
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:16px; margin-top:-8px;">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="{{ $chColor }}"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                                <span style="font-size:12px; color:rgba(255,255,255,0.45);">XP Threshold: <strong style="color:{{ $chColor }};">{{ number_format($chapter->xp_threshold) }} XP</strong></span>
+                            </div>
+                            @endif
+                            
                             <!-- Levels under this chapter -->
                             <div class="level-list">
                                 @forelse($chapter->levels as $level)
                                     <div class="level-item">
-                                        <div class="level-details">
-                                            <div class="level-num">Level {{ $loop->iteration }}</div>
-                                            <div class="level-name">{{ $level->name }}</div>
+                                        <div class="level-item-left">
+                                            <div class="level-color-bar" style="background: {{ $chColor }}; box-shadow: 0 0 8px {{ $chColor }}66;"></div>
+                                            <div class="level-details">
+                                                <div class="level-num" style="color: {{ $chColor }};">Level {{ $loop->iteration }}</div>
+                                                <div class="level-name">{{ $level->name }}</div>
+                                            </div>
                                         </div>
                                         <div class="level-actions">
-                                            <button class="action-icon" onclick="openEditLevelModal({{ json_encode($level) }})">
+                                            <!-- Add Question to Level -->
+                                            <button
+                                                class="action-icon"
+                                                onclick="openAddQuestionForLevel({{ $level->id }})"
+                                                title="Add Question to this Level"
+                                                style="transition:color 0.2s; display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:{{ $chColor }}; border:1px solid {{ $chColor }}44; border-radius:8px; padding:5px 10px;"
+                                                onmouseenter="this.style.background='{{ $chColor }}22'" onmouseleave="this.style.background=''"
+                                            >
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                                                ADD SOAL
+                                            </button>
+                                            <button class="action-icon" onclick="openEditLevelModal({{ json_encode($level) }})" style="transition:color 0.2s;" onmouseenter="this.style.color='{{ $chColor }}'" onmouseleave="this.style.color=''">
                                                 <!-- Edit Icon -->
                                                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                                             </button>
@@ -660,12 +785,12 @@
                                         </div>
                                     </div>
                                 @empty
-                                    <div style="font-size:13px; color:var(--muted); text-align:center; padding:12px 0;">No levels in this chapter.</div>
+                                    <div style="font-size:13px; color:var(--muted); text-align:center; padding:12px 0;">No levels in this chapter yet.</div>
                                 @endforelse
                             </div>
 
                             <!-- Add Level to Chapter -->
-                            <button class="btn-dashed-add" style="padding:16px; border-radius:12px; font-size:13px;" onclick="openAddLevelModal({{ $chapter->id }})">
+                            <button class="btn-dashed-add" style="padding:16px; border-radius:12px; font-size:13px; border-color:{{ $chColor }}44; color:{{ $chColor }};" onmouseenter="this.style.borderColor='{{ $chColor }}'" onmouseleave="this.style.borderColor='{{ $chColor }}44'" onclick="openAddLevelModal({{ $chapter->id }})">
                                 + Add New Level
                             </button>
                         </div>
@@ -684,14 +809,23 @@
                 <div class="tab-pane">
                     <div class="quiz-grid">
                         @foreach($questions as $question)
-                            <div class="quiz-card">
+                            @php
+                                $qChColor = '#00d4d4';
+                                if ($question->level && $question->level->chapter && !empty($question->level->chapter->icon_emoji)) {
+                                    $qChColor = $question->level->chapter->icon_emoji;
+                                }
+                            @endphp
+                            <div class="quiz-card" style="border-top: 3px solid {{ $qChColor }};">
                                 <div class="quiz-card-header">
                                     <div>
+                                        <div style="font-size:10px; font-weight:700; color:{{ $qChColor }}; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px;">
+                                            {{ $question->level->chapter->title ?? 'Chapter' }} → {{ $question->level->name ?? 'Level' }}
+                                        </div>
                                         <div class="quiz-title">Soal ({{ $question->type == 'MULTIPLE_CHOICE' ? 'Pilihan Ganda' : ($question->type == 'SENTENCE_ARRANGEMENT' ? 'Susun Kalimat' : 'Praktek Lab') }})</div>
-                                        <span class="quiz-badge">{{ str_replace('_', ' ', $question->type) }}</span>
+                                        <span class="quiz-badge" style="background: {{ $qChColor }}22; color: {{ $qChColor }};">{{ str_replace('_', ' ', $question->type) }}</span>
                                     </div>
                                     <div class="level-actions" style="position: absolute; right: 24px; top: 24px;">
-                                        <button class="action-icon" onclick="openEditQuestionModal({{ json_encode($question) }})">
+                                        <button class="action-icon" onclick="openEditQuestionModal({{ json_encode($question->load('level.chapter', 'multipleChoiceOptions', 'sentenceArrangementWords', 'labPracticeConfig')) }})" onmouseenter="this.style.color='{{ $qChColor }}'" onmouseleave="this.style.color=''">
                                             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                                         </button>
                                         <form method="POST" action="{{ route('admin.questions.destroy', $question->id) }}" onsubmit="return confirm('Delete this question?')">
@@ -706,8 +840,8 @@
                                     {{ $question->question_text }}
                                 </div>
                                 <div class="quiz-card-footer">
-                                    <span>⚡ {{ $question->xp_reward }} XP REWARD</span>
-                                    <span class="quiz-view-details" onclick="alert('Explanation: {{ $question->explanation }}')">View Details</span>
+                                    <span style="color:{{ $qChColor }}">⚡ {{ $question->xp_reward }} XP REWARD</span>
+                                    <span class="quiz-view-details" style="color:{{ $qChColor }}" onclick="alert('Explanation: {{ addslashes($question->explanation) }}')">View Details</span>
                                 </div>
                             </div>
                         @endforeach
@@ -716,7 +850,7 @@
                     <!-- Add New Question Button -->
                     <button class="btn-dashed-add" onclick="openAddQuestionModal()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                        <span>Add new question</span>
+                        <span>Add New Question</span>
                     </button>
                 </div>
             @endif
@@ -728,31 +862,48 @@
 <!-- ──────────────── MODALS ──────────────── -->
 
 <!-- 1. CHAPTER MODAL -->
+@php
+    $chapterColorPresets = ['#991F1F', '#B87A6E', '#B8F400', '#00D4D4', '#B073FF', '#FF4646'];
+    $defaultChapterColor = $chapterColorPresets[0];
+@endphp
 <div id="chapterModal" class="modal-overlay" onclick="closeModalOnOverlay(event, 'chapterModal')">
-    <div class="modal-box">
+    <div class="modal-box" onclick="event.stopPropagation()">
         <div class="modal-header">
-            <span id="chapterModalTitle">Add New Chapter</span>
-            <button class="modal-close" onclick="closeModal('chapterModal')">&times;</button>
+            <span id="chapterModalTitle">Section Chapter</span>
+            <button type="button" class="modal-close" onclick="closeModal('chapterModal')" aria-label="Close">&times;</button>
         </div>
         <form id="chapterForm" method="POST" action="{{ route('admin.chapters.store') }}">
             @csrf
-            <div class="form-group" style="margin-bottom: 16px;">
-                <label class="form-label">Chapter Title</label>
-                <input type="text" id="chapter_title" name="title" class="form-control" placeholder="e.g. Pengenalan Kimia" required>
+            <input type="hidden" id="chapter_method" name="_ignored_method" value="">
+            <div class="form-group">
+                <label class="form-label" for="chapter_title">Chapter Title</label>
+                <input type="text" id="chapter_title" name="title" class="form-control" placeholder="Pengenalan Atom" required>
             </div>
-            <div class="form-group" style="margin-bottom: 16px;">
-                <label class="form-label">XP Threshold</label>
-                <input type="number" id="chapter_xp" name="xp_threshold" class="form-control" placeholder="e.g. 100" required>
+            <div class="form-group">
+                <label class="form-label" for="chapter_xp">XP Threshold / XP Requirement</label>
+                <input type="number" id="chapter_xp" name="xp_threshold" class="form-control" placeholder="500" min="0" required>
             </div>
-            <div class="form-group" style="margin-bottom: 16px;">
-                <label class="form-label">Icon Emoji / Color</label>
-                <input type="text" id="chapter_emoji" name="icon_emoji" class="form-control" placeholder="e.g. 🧪 or #00d4d4">
+            <div class="form-group">
+                <label class="form-label form-label-cyan">Color</label>
+                <div class="chapter-color-panel">
+                    <div class="chapter-color-swatches" id="chapter_color_swatches">
+                        @foreach($chapterColorPresets as $hex)
+                            <button type="button"
+                                class="chapter-color-swatch{{ $loop->first ? ' selected' : '' }}"
+                                data-color="{{ strtoupper($hex) }}"
+                                style="background-color: {{ $hex }};"
+                                aria-label="Warna {{ $hex }}"
+                                onclick="selectChapterColor('{{ $hex }}')"></button>
+                        @endforeach
+                    </div>
+                </div>
+                <input type="hidden" name="icon_emoji" id="chapter_emoji" value="{{ $defaultChapterColor }}">
             </div>
-            <div class="form-group" style="margin-bottom: 24px;">
-                <label class="form-label">Order Index</label>
-                <input type="number" id="chapter_order" name="order_index" class="form-control" placeholder="e.g. 1">
+            <div class="form-group">
+                <label class="form-label" for="chapter_order">Chapter Order</label>
+                <input type="number" id="chapter_order" name="order_index" class="form-control" placeholder="e.g. 1" min="1">
             </div>
-            <button type="submit" class="btn-submit" style="width:100%;">Save Chapter</button>
+            <button type="submit" id="btn-chapter-save" class="btn-chapter-save">Save Chapter</button>
         </form>
     </div>
 </div>
@@ -824,8 +975,13 @@
             <div class="form-card" style="padding: 20px; margin-bottom: 24px;">
                 <div class="form-card-title">Target Level</div>
                 <select name="level_id" id="q_level_id" class="form-control" style="background:#162427; border:1px solid rgba(255,255,255,0.08); width:100%;" required>
-                    @foreach($levels as $lvl)
-                        <option value="{{ $lvl->id }}">{{ $lvl->chapter->title ?? 'Chapter' }} &rarr; {{ $lvl->name }}</option>
+                    @foreach($chapters as $ch)
+                        @php $chColor = !empty($ch->icon_emoji) && str_starts_with($ch->icon_emoji, '#') ? $ch->icon_emoji : '#00d4d4'; @endphp
+                        <optgroup label="📌 {{ $ch->title }}" style="color: {{ $chColor }};">
+                            @foreach($ch->levels as $lvl)
+                                <option value="{{ $lvl->id }}">Level {{ $lvl->order_index }} — {{ $lvl->name }}</option>
+                            @endforeach
+                        </optgroup>
                     @endforeach
                 </select>
             </div>
@@ -1052,23 +1208,45 @@
     }
 
     // 1. CHAPTER FUNCTIONS
+    const CHAPTER_DEFAULT_COLOR = @json($defaultChapterColor);
+
+    function normalizeChapterColor(value) {
+        if (!value || typeof value !== 'string') return CHAPTER_DEFAULT_COLOR;
+        const trimmed = value.trim();
+        if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed.toUpperCase();
+        return CHAPTER_DEFAULT_COLOR;
+    }
+
+    function selectChapterColor(hex) {
+        const color = normalizeChapterColor(hex);
+        const input = document.getElementById('chapter_emoji');
+        if (input) input.value = color;
+        document.querySelectorAll('#chapter_color_swatches .chapter-color-swatch').forEach((btn) => {
+            btn.classList.toggle('selected', btn.getAttribute('data-color').toUpperCase() === color);
+        });
+    }
+
     function openAddChapterModal() {
-        document.getElementById('chapterModalTitle').innerText = 'Add New Chapter';
+        document.getElementById('chapterModalTitle').innerText = 'Add Chapter';
         document.getElementById('chapterForm').action = "{{ route('admin.chapters.store') }}";
         document.getElementById('chapter_title').value = '';
         document.getElementById('chapter_xp').value = '';
-        document.getElementById('chapter_emoji').value = '';
-        document.getElementById('chapter_order').value = '';
+        document.getElementById('chapter_order').value = {{ $chapters->count() + 1 }};
+        document.getElementById('btn-chapter-save').textContent = 'Save Chapter';
+        selectChapterColor(CHAPTER_DEFAULT_COLOR);
         openModal('chapterModal');
     }
 
     function openEditChapterModal(chapter) {
         document.getElementById('chapterModalTitle').innerText = 'Edit Chapter';
+        // Use the POST-based update route (no PUT needed)
         document.getElementById('chapterForm').action = "/admin/chapters/" + chapter.id;
         document.getElementById('chapter_title').value = chapter.title;
         document.getElementById('chapter_xp').value = chapter.xp_threshold;
-        document.getElementById('chapter_emoji').value = chapter.icon_emoji || '';
-        document.getElementById('chapter_order').value = chapter.order_index || '';
+        // Use nullish coalescing so 0 doesn't become an empty string.
+        document.getElementById('chapter_order').value = (chapter.order_index ?? '');
+        document.getElementById('btn-chapter-save').textContent = 'Update Chapter';
+        selectChapterColor(chapter.icon_emoji || CHAPTER_DEFAULT_COLOR);
         openModal('chapterModal');
     }
 
@@ -1096,12 +1274,22 @@
         document.getElementById('level_name').value = level.name;
         document.getElementById('level_xp').value = level.xp_required;
         document.getElementById('level_desc').value = level.description || '';
-        document.getElementById('level_timer').value = level.timer_limit || '';
-        document.getElementById('level_order').value = level.order_index || '';
+        document.getElementById('level_timer').value = (level.timer_limit ?? '');
+        document.getElementById('level_order').value = (level.order_index ?? '');
         openModal('levelModal');
     }
 
     // 3. QUESTION FUNCTIONS
+    function openAddQuestionForLevel(levelId) {
+        // Reset form first
+        openAddQuestionModal();
+        // Then pre-select the level
+        const select = document.getElementById('q_level_id');
+        if (select) {
+            select.value = levelId;
+        }
+    }
+
     function setQuestionType(type) {
         document.getElementById('q_type').value = type;
 
@@ -1211,7 +1399,7 @@
         
         document.getElementById('q_level_id').value = question.level_id;
         document.getElementById('q_text').value = question.question_text;
-        document.getElementById('q_order').value = question.order_index || '';
+        document.getElementById('q_order').value = (question.order_index ?? '');
 
         ['A', 'B', 'C', 'D'].forEach(l => {
             document.getElementById(`mc-row-${l}`).classList.remove('selected');

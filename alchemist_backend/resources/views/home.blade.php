@@ -27,16 +27,20 @@
 
         .streak-days { display: flex; gap: 10px; margin-left: auto; }
         .day-pill {
-            display: flex; align-items: center; justify-content: center;
-            width: 52px; height: 52px; border-radius: 14px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 52px; height: 60px; border-radius: 14px;
             background: rgba(255, 255, 255, 0.04);
-            transition: all 0.2s;
+            transition: all 0.2s; gap: 2px;
         }
         .day-pill.today { background: var(--lime); }
         .day-pill .day-label {
             font-size: 12.5px; font-weight: 500; color: rgba(255, 255, 255, 0.7); text-transform: capitalize;
         }
+        .day-pill .day-date {
+            font-size: 10px; font-weight: 400; color: rgba(255, 255, 255, 0.45);
+        }
         .day-pill.today .day-label { color: #021a1a !important; font-weight: 700; }
+        .day-pill.today .day-date  { color: rgba(2, 26, 26, 0.65) !important; }
 
         /* ── CHAPTER BANNER ── */
         .chapter-banner {
@@ -133,6 +137,7 @@
             @foreach($days as $day)
                 <div class="day-pill {{ $day['isToday'] ? 'today' : '' }}">
                     <span class="day-label">{{ $day['label'] }}</span>
+                    <span class="day-date">{{ $day['date'] }}</span>
                 </div>
             @endforeach
         </div>

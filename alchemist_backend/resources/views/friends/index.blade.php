@@ -89,6 +89,24 @@
         color: var(--cyan, #00d4d4);
     }
 
+    /* Request notification badge on tab button */
+    .req-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ff4d4d;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        padding: 0 5px;
+        margin-left: 6px;
+        vertical-align: middle;
+        line-height: 1;
+    }
+
     /* SEARCH BAR */
     .search-bar-container {
         position: relative;
@@ -249,6 +267,29 @@
         height: 24px;
     }
 
+    .unfriend-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s ease;
+        color: #ff4d4d;
+        flex-shrink: 0;
+    }
+
+    .unfriend-btn:hover {
+        background: rgba(255, 77, 77, 0.12);
+    }
+
+    .unfriend-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+
     /* REQUESTS CARDS */
     .requests-grid {
         display: grid;
@@ -379,7 +420,39 @@
     // On Load
     document.addEventListener('DOMContentLoaded', () => {
         loadData('yours'); // Load Yours by default
+        pollRequestCount();  // Start polling for incoming requests
     });
+
+    // Poll request count every 10 seconds and update badge
+    let requestPollInterval = null;
+    function pollRequestCount() {
+        checkRequestCount();
+        requestPollInterval = setInterval(checkRequestCount, 10000);
+    }
+
+    function checkRequestCount() {
+        fetch('{{ route("friends.requests") }}', { cache: 'no-store' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                const count = data.data.length;
+                const btn = document.getElementById('tab-requests');
+                // Remove old badge if any
+                const old = btn.querySelector('.req-badge');
+                if (old) old.remove();
+                if (count > 0) {
+                    const badge = document.createElement('span');
+                    badge.className = 'req-badge';
+                    badge.textContent = count;
+                    btn.appendChild(badge);
+                }
+                // If currently on requests tab, refresh the list silently
+                if (currentTab === 'requests') {
+                    renderData('requests', data.data);
+                }
+            })
+            .catch(() => {});
+    }
 
     // Tab Switching
     function switchTab(tab) {
@@ -409,7 +482,7 @@
             url = '{{ route("friends.search") }}?q=' + encodeURIComponent(query);
         }
 
-        fetch(url)
+        fetch(url, { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -462,17 +535,19 @@
     function createUserBar(user, tab) {
         const div = document.createElement('div');
         div.className = 'user-bar';
+        div.style.cursor = 'pointer';
+        div.onclick = () => { window.location.href = `/profile/${user.id}`; };
 
         // Rank Badge HTML
         const rankHtml = user.rank_icon_url 
             ? `<div class="rank-badge"><img src="${user.rank_icon_url}" alt="Rank"></div>`
             : '';
         
-        // Action Button (Only show add button if in 'add' tab and not friends)
+        // Action Button
         let actionHtml = '';
         if (tab === 'add' && user.friendship_status !== 'accepted' && user.friendship_status !== 'pending' && user.friendship_status !== 'requested_to_me') {
             actionHtml = `
-                <button class="action-btn" onclick="sendRequest(${user.id}, this)">
+                <button class="action-btn" onclick="event.stopPropagation(); sendRequest(${user.id}, this)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                         <circle cx="8.5" cy="7" r="4"></circle>
@@ -483,6 +558,16 @@
             `;
         } else if (tab === 'add' && user.friendship_status === 'pending') {
             actionHtml = `<span class="u-meta" style="margin-right: 16px;">Requested</span>`;
+        } else if (tab === 'yours') {
+            actionHtml = `
+                <button class="unfriend-btn" onclick="event.stopPropagation(); unfriend(${user.id}, this)" title="Unfriend">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="8.5" cy="7" r="4"></circle>
+                        <line x1="23" y1="11" x2="17" y2="11"></line>
+                    </svg>
+                </button>
+            `;
         }
 
         div.innerHTML = `
@@ -576,6 +661,23 @@
             if(data.success) {
                 // Remove card
                 btnElement.closest('.request-card').remove();
+            }
+        });
+    }
+
+    function unfriend(id, btnElement) {
+        if (!confirm('Remove this friend?')) return;
+        fetch(`{{ url('/friends/unfriend') }}/${id}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                btnElement.closest('.user-bar').remove();
             }
         });
     }

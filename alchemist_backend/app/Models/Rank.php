@@ -16,3 +16,4 @@ class Rank extends Model
         'icon_url',
     ];
 }
+

@@ -115,7 +115,7 @@ class _RankScreenState extends State<RankScreen> {
                         backgroundImage: NetworkImage(ApiService.getAvatarUrl(user?.avatarUrl, fallbackSeed: user?.username ?? 'admin')),
                         child: user?.avatarUrl == null ? const Icon(Icons.person, size: 22) : null,
                       ),
-                      if (_displayRankData != null && _displayRankData!['icon_url'] != null)
+                      if (_displayRankData != null && (_displayRankData!['rank_icon_url'] != null || _displayRankData!['icon_url'] != null))
                         Positioned(
                           bottom: -2, right: -2,
                           child: Container(
@@ -124,10 +124,10 @@ class _RankScreenState extends State<RankScreen> {
                             child: CircleAvatar(
                               radius: 8,
                               backgroundColor: _cyan,
-                              backgroundImage: _displayRankData!['icon_url'].startsWith('http') 
-                                ? NetworkImage(_displayRankData!['icon_url']) 
+                              backgroundImage: (_displayRankData!['rank_icon_url'] ?? _displayRankData!['icon_url']).startsWith('http') 
+                                ? NetworkImage(_displayRankData!['rank_icon_url'] ?? _displayRankData!['icon_url']) 
                                 : null,
-                              child: _displayRankData!['icon_url'].startsWith('http') 
+                              child: (_displayRankData!['rank_icon_url'] ?? _displayRankData!['icon_url']).startsWith('http') 
                                 ? null 
                                 : const Icon(Icons.shield, size: 10, color: Colors.black),
                             ),
@@ -263,7 +263,7 @@ class _RankScreenState extends State<RankScreen> {
     final user = ApiService().currentUser;
     final userColor = _parseColor(user?.profileBgColor) ?? _cyan;
     final rankName = (_displayRankData?['name'] ?? 'Unranked').toString().toUpperCase();
-    final rankIcon = _displayRankData?['icon_url'];
+    final rankIcon = _displayRankData?['rank_icon_url'] ?? _displayRankData?['icon_url'];
     final totalXp = user?.totalXp ?? 0;
     String chapterSubtitle = 'CHAPTER 1. AHLI ATOM';
     String nextChapterTitle = 'NEXT CHAPTER';

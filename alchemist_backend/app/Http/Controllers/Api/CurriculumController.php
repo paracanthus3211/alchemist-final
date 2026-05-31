@@ -33,17 +33,30 @@ class CurriculumController extends Controller
             $formattedLevels = $levels->map(function($level) use ($user, $userXp, &$completedLevelsCount) {
                 $totalLevelXp = $level->questions->sum('xp_reward');
                 $userLevelXp = 0;
+                $isLevelCompleted = false;
                 
                 if ($user) {
-                    $userLevelXp = \App\Models\UserQuestionAttempt::where('user_id', $user->id)
-                        ->whereIn('question_id', $level->questions->pluck('id'))
-                        ->where('is_correct', true)
-                        ->sum('xp_earned');
+                    // Use UserLevelCompletion as primary source of truth (same as web)
+                    $completion = \App\Models\UserLevelCompletion::where('user_id', $user->id)
+                        ->where('level_id', $level->id)
+                        ->first();
+                    
+                    if ($completion) {
+                        $isLevelCompleted = true;
+                        // If completed, progress is 100%
+                        $userLevelXp = $totalLevelXp;
+                    } else {
+                        // If not completed, calculate progress from question attempts
+                        $userLevelXp = \App\Models\UserQuestionAttempt::where('user_id', $user->id)
+                            ->whereIn('question_id', $level->questions->pluck('id'))
+                            ->where('is_correct', true)
+                            ->sum('xp_earned');
+                    }
                 }
 
-                $progress = $totalLevelXp > 0 ? min(100, round(($userLevelXp / $totalLevelXp) * 100)) : 0;
+                $progress = $isLevelCompleted ? 100 : ($totalLevelXp > 0 ? min(100, round(($userLevelXp / $totalLevelXp) * 100)) : 0);
                 
-                if ($progress >= 100) {
+                if ($isLevelCompleted) {
                     $completedLevelsCount++;
                 }
 
@@ -53,7 +66,8 @@ class CurriculumController extends Controller
                     'user_xp' => $userLevelXp,
                     'total_xp' => $totalLevelXp,
                     'progress' => $progress,
-                    'is_locked' => $isLevelLocked
+                    'is_locked' => $isLevelLocked,
+                    'is_completed' => $isLevelCompleted
                 ]);
             });
 
@@ -338,8 +352,10 @@ class CurriculumController extends Controller
             ]
         );
 
-        // Update Daily Task Progress for SCORE
-        $this->_incrementDailyTaskProgress($user, 'SCORE', $request->score);
+        // Update Daily Task Progress for QUIZ_SCORE (if score >= 70%)
+        if ($request->score >= 70) {
+            $this->_incrementDailyTaskProgress($user, 'QUIZ_SCORE', 1);
+        }
         
         // Update Daily Task Progress for FINISH_LESSONS
         $this->_incrementDailyTaskProgress($user, 'FINISH_LESSONS', 1, $levelId);
@@ -355,3 +371,4 @@ class CurriculumController extends Controller
         ]);
     }
 }
+

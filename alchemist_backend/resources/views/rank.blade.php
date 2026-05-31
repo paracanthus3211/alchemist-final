@@ -49,6 +49,12 @@
             border-radius: 16px; padding: 24px; display: flex; align-items: center; gap: 24px;
             margin-bottom: 60px;
             box-shadow: 0 6px 0 #05262a;
+            cursor: pointer;
+            transition: transform 0.05s, box-shadow 0.05s;
+        }
+        .my-rank-card:active {
+            transform: translateY(6px);
+            box-shadow: none !important;
         }
         
         .my-rank-badge-wrap {
@@ -65,8 +71,8 @@
 
         .my-xp { font-size: 22px; font-weight: 500; font-family: 'Space Grotesk', sans-serif; }
 
-        .my-progress-bar { width: 100%; height: 10px; background: #d9d9d9; border-radius: 99px; overflow: hidden; }
-        .my-progress-fill { height: 100%; border-radius: 99px; }
+        .my-progress-bar { width: 100%; height: 10px; background: rgba(255,255,255,0.15); border-radius: 99px; overflow: hidden; }
+        .my-progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
         .my-progress-text { font-size: 10px; color: rgba(255,255,255,0.6); text-align: center; margin-top: 8px; }
 
         /* ── PODIUM ── */
@@ -100,8 +106,8 @@
         /* Rank 3 */
         .podium-rank-3 .podium-avatar { width: 70px; height: 70px; border-color: var(--cyan); box-shadow: 0 0 20px rgba(0, 212, 212, 0.3); }
 
-        .podium-crown { position: absolute; top: -18px; width: 32px; height: 32px; background: var(--lime); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-        .podium-crown svg { width: 20px; height: 20px; fill: #000; }
+        .podium-crown { position: absolute; top: -44px; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; z-index: 2; }
+        .podium-crown img { width: 58px; height: 58px; }
         
         .podium-badge {
             position: absolute; bottom: 30px; right: -5px; width: 24px; height: 24px;
@@ -116,9 +122,9 @@
         .podium-rank-2 .podium-xp { color: #d896ff; }
         .podium-rank-3 .podium-xp { color: var(--cyan); }
 
-        .podium-rank-2 { padding-bottom: 90px; }
-        .podium-rank-1 { padding-bottom: 130px; z-index: 2; margin: 0 10px; }
-        .podium-rank-3 { padding-bottom: 70px; }
+        .podium-rank-2 { padding-bottom: 130px; }
+        .podium-rank-1 { padding-bottom: 190px; z-index: 2; margin: 0 10px; }
+        .podium-rank-3 { padding-bottom: 110px; }
 
 
         /* ── RANK LIST ── */
@@ -167,7 +173,7 @@
     <div class="header-title">Alchemy Rank</div>
 
     <div class="time-tabs">
-        <a href="{{ route('rank', ['period' => 'week', 'scope' => $scope]) }}" class="time-tab {{ $period === 'week' ? 'active' : '' }}" style="text-decoration:none;">Last Week</a>
+        <a href="{{ route('rank', ['period' => 'week', 'scope' => $scope]) }}" class="time-tab {{ $period === 'week' ? 'active' : '' }}" style="text-decoration:none;">This Week</a>
         <a href="{{ route('rank', ['period' => 'month', 'scope' => $scope]) }}" class="time-tab {{ $period === 'month' ? 'active' : '' }}" style="text-decoration:none;">This Month</a>
         <a href="{{ route('rank', ['period' => 'all', 'scope' => $scope]) }}" class="time-tab {{ $period === 'all' ? 'active' : '' }}" style="text-decoration:none;">All Time</a>
     </div>
@@ -180,8 +186,29 @@
     <!-- MY RANK CARD -->
     <a href="{{ route('ranks.index') }}" class="my-rank-card" style="text-decoration:none; color:inherit; display:flex;">
         <div class="my-rank-badge-wrap">
-            @if($user->selectedRank && $user->selectedRank->icon_url)
-                <img src="{{ $user->selectedRank->icon_url }}" style="width:100%; height:100%; object-fit:contain;" alt="Rank Icon">
+            @php
+                // Get selected rank or default to Novice
+                $displayRank = null;
+                if ($user->selected_rank_id) {
+                    $displayRank = $user->selectedRank;
+                }
+                
+                // If no selected rank, auto-detect by XP or default to Novice
+                if (!$displayRank) {
+                    $userXp = $user->xp ?? 0;
+                    $displayRank = \App\Models\Rank::where('xp_threshold', '<=', $userXp)
+                        ->orderByDesc('xp_threshold')
+                        ->first();
+                    
+                    // If still no rank, get Novice as default
+                    if (!$displayRank) {
+                        $displayRank = \App\Models\Rank::where('name', 'Novice')->first();
+                    }
+                }
+            @endphp
+            
+            @if($displayRank && $displayRank->icon_url)
+                <img src="{{ $displayRank->icon_url }}" style="width:100%; height:100%; object-fit:contain;" alt="{{ $displayRank->name }}">
             @else
                 <svg width="76" height="86" viewBox="0 0 100 115" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M50 2 L98 22 L98 82 L50 113 L2 82 L2 22 Z" fill="#d3aa4e" stroke="#fae188" stroke-width="4"/>
@@ -199,21 +226,19 @@
             <div class="my-rank-top">
                 <div class="my-details">
                     <div class="my-name">{{ $user->username ?? $user->name }}</div>
-                    <div class="my-level">
-                        @if($user->selectedRank)
-                            Chapter {{ $user->selectedRank->chapter ?? '-' }}, {{ $user->selectedRank->name }}
-                        @else
-                            Chapter 1, Ahli Atom
-                        @endif
-                    </div>
+                    <div class="my-level">{{ $userChapterLabel }}</div>
                 </div>
                 <div class="my-xp" style="color: {{ $user->profile_bg_color ?? 'var(--cyan)' }}">{{ number_format($currentUserXp) }} XP</div>
             </div>
             <div>
                 <div class="my-progress-bar">
-                    <div class="my-progress-fill" style="background-color: {{ $user->profile_bg_color ?? 'var(--cyan)' }}; width: 60%;"></div>
+                    <div class="my-progress-fill" style="background-color: {{ $user->profile_bg_color ?? 'var(--cyan)' }}; width: {{ $rankProgressPct }}%;"></div>
                 </div>
-                <div class="my-progress-text">550/550 XP towards 333</div>
+                @if($nextRankName)
+                    <div class="my-progress-text">{{ number_format($user->xp) }}/{{ number_format($nextRankXp) }} XP towards <strong>{{ $nextRankName }}</strong></div>
+                @else
+                    <div class="my-progress-text">{{ number_format($user->xp) }} XP — Max Rank Achieved 🏆</div>
+                @endif
             </div>
         </div>
     </a>
@@ -227,8 +252,7 @@
         @php $rank2 = $top3->values()->get(1); @endphp
         <div class="podium-box-wrap podium-rank-2">
             <div class="podium-avatar-wrap">
-                <img src="{{ $rank2->equippedAvatar->image_url ?? $rank2->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $rank2->username }}" class="podium-avatar">
-                <div class="podium-badge">2</div>
+                <img src="{{ $rank2->equippedAvatar->image_url ?? $rank2->avatar_url ?? '/images/chapter.png' }}" class="podium-avatar">
             </div>
             <div class="podium-name">{{ $rank2->username }}</div>
             <div class="podium-xp">{{ number_format($rank2->xp) }} XP</div>
@@ -239,10 +263,9 @@
         <div class="podium-box-wrap podium-rank-1">
             <div class="podium-avatar-wrap">
                 <div class="podium-crown">
-                    <svg viewBox="0 0 24 24"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
+                    <img src="{{ asset('images/rank_crown.png') }}" alt="Crown" style="width:28px; height:28px; object-fit:contain;">
                 </div>
-                <img src="{{ $rank1->equippedAvatar->image_url ?? $rank1->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $rank1->username }}" class="podium-avatar">
-                <div class="podium-badge">1</div>
+                <img src="{{ $rank1->equippedAvatar->image_url ?? $rank1->avatar_url ?? '/images/chapter.png' }}" class="podium-avatar">
             </div>
             <div class="podium-name">{{ $rank1->username }}</div>
             <div class="podium-xp">{{ number_format($rank1->xp) }} XP</div>
@@ -252,8 +275,7 @@
         @php $rank3 = $top3->values()->get(2); @endphp
         <div class="podium-box-wrap podium-rank-3">
             <div class="podium-avatar-wrap">
-                <img src="{{ $rank3->equippedAvatar->image_url ?? $rank3->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $rank3->username }}" class="podium-avatar">
-                <div class="podium-badge">3</div>
+                <img src="{{ $rank3->equippedAvatar->image_url ?? $rank3->avatar_url ?? '/images/chapter.png' }}" class="podium-avatar">
             </div>
             <div class="podium-name">{{ $rank3->username }}</div>
             <div class="podium-xp">{{ number_format($rank3->xp) }} XP</div>
@@ -266,17 +288,45 @@
     <div class="rank-list-wrap">
         @php $currentRankNum = 4; @endphp
         @foreach($rest as $rUser)
-            <div class="rank-list-item {{ $rUser->id == $user->id ? 'is-me' : '' }}">
+            @php
+                // Get current rank for this user
+                $userCurrentRank = null;
+                if ($rUser->selected_rank_id) {
+                    $userCurrentRank = $rUser->selectedRank;
+                }
+                
+                // If no selected rank, auto-detect by XP
+                if (!$userCurrentRank) {
+                    $userXp = $rUser->xp ?? 0;
+                    $userCurrentRank = \App\Models\Rank::where('xp_threshold', '<=', $userXp)
+                        ->orderByDesc('xp_threshold')
+                        ->first();
+                    
+                    // If still no rank, get Novice as default
+                    if (!$userCurrentRank) {
+                        $userCurrentRank = \App\Models\Rank::where('name', 'Novice')->first();
+                    }
+                }
+            @endphp
+            <div class="rank-list-item {{ $rUser->id == $user->id ? 'is-me' : '' }}"
+                 style="cursor:pointer;" onclick="window.location.href='{{ $rUser->id == $user->id ? route('profile') : route('profile.show', $rUser->id) }}'">
                 <div class="list-rank-num">{{ $currentRankNum }}</div>
                 <div class="list-avatar-wrap">
-                    <img src="{{ $rUser->equippedAvatar->image_url ?? $rUser->avatar_url ?? 'https://i.pravatar.cc/150?u=' . $rUser->username }}" class="list-avatar">
-                    <div class="list-badge">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="#000"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-                    </div>
+                    <img src="{{ $rUser->equippedAvatar->image_url ?? $rUser->avatar_url ?? '/images/chapter.png' }}" class="list-avatar">
+                    @if($userCurrentRank && $userCurrentRank->icon_url)
+                        <div style="position:absolute; bottom:4px; right:-6px; width:20px; height:22px;">
+                            <img src="{{ $userCurrentRank->icon_url }}" alt="{{ $userCurrentRank->name }}"
+                                 style="width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 0 4px rgba(211,170,78,0.5));">
+                        </div>
+                    @else
+                        <div class="list-badge">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="#000"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+                        </div>
+                    @endif
                 </div>
                 <div class="list-details">
                     <div class="list-name">{{ $rUser->username }}</div>
-                    <div class="list-level">Novice</div>
+                    <div class="list-level">{{ $userCurrentRank ? $userCurrentRank->name : 'Novice' }}</div>
                 </div>
                 <div class="list-xp">{{ number_format($rUser->xp) }} <br><span>XP</span></div>
             </div>
@@ -290,3 +340,4 @@
 
 </div>
 @endsection
+
